@@ -15,7 +15,7 @@ export async function currentProfile(): Promise<Profile | null> {
   return {
     email,
     name: session.user?.name?.trim() || email,
-    provider: session.provider === "microsoft" ? "microsoft" : "google",
+    provider: session.provider === "microsoft" ? "microsoft" : session.provider === "email" ? "email" : "google",
   }
 }
 

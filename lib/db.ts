@@ -3,22 +3,25 @@ import { PGlite } from "@electric-sql/pglite"
 import pg from "pg"
 
 const databaseUrl = process.env.DATABASE_URL?.trim() ?? ""
-let pool: pg.Pool | undefined
-let local: Promise<PGlite> | undefined
+
+const holders = globalThis as unknown as {
+  uxReviewPool?: pg.Pool
+  uxReviewLocal?: Promise<PGlite>
+}
 
 export async function sql<T = Record<string, unknown>>(
   text: string,
   params: unknown[] = [],
 ): Promise<T[]> {
   if (databaseUrl !== "") {
-    pool ??= new pg.Pool({ connectionString: databaseUrl, max: 5 })
-    return (await pool.query(text, params)).rows as T[]
+    holders.uxReviewPool ??= new pg.Pool({ connectionString: databaseUrl, max: 5 })
+    return (await holders.uxReviewPool.query(text, params)).rows as T[]
   }
-  local ??= startLocal().catch((error: unknown) => {
-    local = undefined
+  holders.uxReviewLocal ??= startLocal().catch((error: unknown) => {
+    holders.uxReviewLocal = undefined
     throw error
   })
-  return (await (await local).query<T>(text, params)).rows
+  return (await (await holders.uxReviewLocal).query<T>(text, params)).rows
 }
 
 async function startLocal(): Promise<PGlite> {

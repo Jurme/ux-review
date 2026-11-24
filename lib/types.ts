@@ -1,6 +1,6 @@
 export type Role = "admin" | "member"
 export type AccountStatus = "active" | "invited"
-export type Provider = "google" | "microsoft"
+export type Provider = "google" | "microsoft" | "email"
 export type Lifecycle = "draft" | "open" | "completed" | "archived"
 export type Phase =
   | "draft"

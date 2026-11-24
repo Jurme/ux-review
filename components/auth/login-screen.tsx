@@ -3,6 +3,7 @@
 import { signIn, signOut } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, type ReactNode } from "react"
+import { toast } from "sonner"
 import { Boot, Mark } from "@/components/common"
 import { useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -12,31 +13,46 @@ export function LoginScreen() {
   const { ready, user, gate, inviteEmail } = useWorkspace()
   const router = useRouter()
   const params = useSearchParams()
-  const [providers, setProviders] = useState<{ google: boolean; microsoft: boolean } | null>(null)
-  const [origin, setOrigin] = useState("")
+  const [mode, setMode] = useState<"sign-in" | "create">("sign-in")
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [pending, setPending] = useState(false)
 
   useEffect(() => {
     if (ready && user) router.replace("/dashboard")
   }, [ready, user, router])
 
-  useEffect(() => {
-    const here = window.location.origin
-    void fetch("/api/auth/providers")
-      .then((response) => response.json())
-      .then((body: Record<string, unknown>) => {
-        setOrigin(here)
-        setProviders({ google: "google" in body, microsoft: "microsoft-entra-id" in body })
-      })
-      .catch(() => {
-        setOrigin(here)
-        setProviders({ google: false, microsoft: false })
-      })
-  }, [])
-
   if (!ready || user) return <Boot label="Opening workspace" />
 
   const error = params.get("error")
-  const missing = providers && !providers.google && !providers.microsoft
+
+  async function submitEmail() {
+    setPending(true)
+    try {
+      if (mode === "create") {
+        const response = await fetch("/api/register", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name, email, password }),
+        })
+        const body = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null
+        if (!response.ok || !body?.ok) {
+          toast.error(body?.message || "Could not create the account.")
+          return
+        }
+      }
+      const result = await signIn("credentials", { email, password, redirect: false, callbackUrl: "/dashboard" })
+      if (result?.error) {
+        toast.error(mode === "create" ? "Account created, but sign-in did not finish. Try again." : "That email or password is wrong.")
+        return
+      }
+      router.push("/dashboard")
+      router.refresh()
+    } finally {
+      setPending(false)
+    }
+  }
 
   if (gate === "invite") {
     return (
@@ -56,41 +72,46 @@ export function LoginScreen() {
     <Shell>
       <h1 className="text-[32px] font-semibold tracking-tight">Welcome to UX Review</h1>
       <p className="mt-3 text-[16px] leading-7 text-[#717171]">
-        Sign in with your Google or Microsoft account. You’ll land in the workspace as yourself — there is no list of people to choose from.
+        Sign in with Google, Microsoft, or your email. You’ll land in the workspace as yourself.
       </p>
       {error ? (
         <p className="mt-4 rounded-xl bg-[#FDECEC] px-3 py-2 text-[13px] text-[#D93B3B]">
-          {error === "Configuration"
-            ? "Sign-in isn’t configured yet. Add the Google and Microsoft credentials, then try again."
-            : "Sign-in didn’t finish. Try again with the same account."}
+          Google or Microsoft didn’t finish. Use your email and password below.
         </p>
       ) : null}
       <div className="mt-8 space-y-3">
-        <ProviderButton
-          label="Continue with Google"
-          mark={<GoogleMark />}
-          disabled={!providers?.google}
-          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
-        />
-        <ProviderButton
-          label="Continue with Microsoft"
-          mark={<MicrosoftMark />}
-          disabled={!providers?.microsoft}
-          onClick={() => signIn("microsoft-entra-id", { callbackUrl: "/dashboard" })}
-        />
+        <ProviderButton label="Continue with Google" mark={<GoogleMark />} onClick={() => signIn("google", { callbackUrl: "/dashboard" })} />
+        <ProviderButton label="Continue with Microsoft" mark={<MicrosoftMark />} onClick={() => signIn("microsoft-entra-id", { callbackUrl: "/dashboard" })} />
       </div>
-      {missing ? (
-        <div className="mt-6 space-y-2 text-[13px] leading-5 text-[#717171]">
-          <p>Google and Microsoft aren’t connected on this server yet. Add these secrets for the app, then restart:</p>
-          <p className="font-medium text-[#222]">AUTH_SECRET, AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, AUTH_MICROSOFT_ID, AUTH_MICROSOFT_SECRET</p>
-          <p>In each provider, allow these redirect URLs:</p>
-          <p className="break-all">{origin}/api/auth/callback/google</p>
-          <p className="break-all">{origin}/api/auth/callback/microsoft-entra-id</p>
-          <p>AUTH_MICROSOFT_TENANT is optional. Leave it unset to allow any work or personal Microsoft account.</p>
-        </div>
-      ) : (
-        <p className="mt-6 text-[13px] text-[#717171]">The first person to sign in becomes the admin and can invite everyone else by email.</p>
-      )}
+      <div className="my-6 flex items-center gap-3 text-[12px] text-[#717171]">
+        <span className="h-px flex-1 bg-[#EBEBEB]" />
+        or
+        <span className="h-px flex-1 bg-[#EBEBEB]" />
+      </div>
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void submitEmail()
+        }}
+      >
+        {mode === "create" ? (
+          <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" autoComplete="name" aria-label="Name" />
+        ) : null}
+        <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" autoComplete="email" aria-label="Email" />
+        <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete={mode === "create" ? "new-password" : "current-password"} aria-label="Password" />
+        <button type="submit" className={cn("btn btn-primary w-full", tap)} disabled={pending}>
+          {pending ? "Please wait…" : mode === "create" ? "Create account" : "Sign in with email"}
+        </button>
+      </form>
+      <button
+        type="button"
+        className={cn("mt-4 text-[13px] font-medium text-[#717171]", tap)}
+        onClick={() => setMode((current) => (current === "sign-in" ? "create" : "sign-in"))}
+      >
+        {mode === "create" ? "Already have an account? Sign in" : "New here? Create an account"}
+      </button>
+      <p className="mt-4 text-[13px] text-[#717171]">The first person to sign in becomes the admin and can invite everyone else by email.</p>
     </Shell>
   )
 }
@@ -123,14 +144,13 @@ function Shell({ children }: { children: ReactNode }) {
   )
 }
 
-function ProviderButton({ label, mark, disabled, onClick }: { label: string; mark: ReactNode; disabled: boolean; onClick: () => void }) {
+function ProviderButton({ label, mark, onClick }: { label: string; mark: ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
-      disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#EBEBEB] bg-white text-[15px] font-medium hover:bg-[#F7F7F7] disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#EBEBEB] bg-white text-[15px] font-medium hover:bg-[#F7F7F7]",
         tap,
       )}
     >

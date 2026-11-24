@@ -139,7 +139,7 @@ function General({ confirm, setConfirm }: { confirm: boolean; setConfirm: (value
           <Input value={user.email} disabled />
         </Field>
         <p className="text-[13px] text-[#717171]">
-          Signed in with {provider === "microsoft" ? "Microsoft" : "Google"} · {user.role === "admin" ? "Admin" : "Member"}
+          Signed in with {provider === "microsoft" ? "Microsoft" : provider === "email" ? "email" : "Google"} · {user.role === "admin" ? "Admin" : "Member"}
         </p>
         <Button type="submit">Save profile</Button>
       </form>

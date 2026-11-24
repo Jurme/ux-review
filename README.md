@@ -15,18 +15,18 @@ Open the local URL printed by Next.js. The dev server uses port **3847**.
 
 ## Sign in
 
-The welcome screen signs you in with Google or Microsoft. You arrive as that account. There is no list of people to pick from.
+The welcome screen signs you in with Google, Microsoft, or email and password. You arrive as that account. There is no list of people to pick from. Email and password stay available when Google or Microsoft cannot complete.
 
 The first person to sign in becomes the admin of an empty workspace. They add projects, criteria, and reviewers from Settings. An invited reviewer signs in with the same email and sees the reviews assigned to them.
 
-Until the provider credentials exist, the buttons stay disabled and the welcome screen lists the redirect URLs to register:
+Google and Microsoft need these redirect URLs in each provider:
 
 - `{origin}/api/auth/callback/google`
 - `{origin}/api/auth/callback/microsoft-entra-id`
 
-Set `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_MICROSOFT_ID`, and `AUTH_MICROSOFT_SECRET`. `AUTH_MICROSOFT_TENANT` is optional; leave it unset to allow any work or personal Microsoft account.
+Set `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_MICROSOFT_ID`, and `AUTH_MICROSOFT_SECRET`. `AUTH_MICROSOFT_TENANT` is optional; leave it unset to allow any work or personal Microsoft account. Email sign-in does not need those values.
 
-Locally, copy those names into `.env.local`. Do not commit that file. The dev server uses an in-memory database when `DATABASE_URL` is unset.
+Locally, copy the provider names into `.env.local`. Do not commit that file. The dev server uses an in-memory database when `DATABASE_URL` is unset.
 
 ## What you can do
 

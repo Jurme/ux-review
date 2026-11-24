@@ -135,7 +135,7 @@ export function Sidebar({
               >
                 <LogOut className="size-4" />
                 Log out
-                {provider ? <span className="ml-auto text-[11px] text-[#717171]">{provider === "microsoft" ? "Microsoft" : "Google"}</span> : null}
+                {provider ? <span className="ml-auto text-[11px] text-[#717171]">{provider === "microsoft" ? "Microsoft" : provider === "email" ? "Email" : "Google"}</span> : null}
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
