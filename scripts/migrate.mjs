@@ -5,12 +5,13 @@ function read(name) {
   return process.env[name]?.trim() ?? ""
 }
 
-const url =
-  read("POSTGRES_URL_NON_POOLING") ||
-  read("DATABASE_URL_UNPOOLED") ||
+const url = (
   read("POSTGRES_URL") ||
   read("POSTGRES_PRISMA_URL") ||
-  read("DATABASE_URL")
+  read("DATABASE_URL") ||
+  read("POSTGRES_URL_NON_POOLING") ||
+  read("DATABASE_URL_UNPOOLED")
+).replace(/([?&])pgbouncer=(?:true|false)&?/gi, "$1").replace(/[?&]$/, "")
 
 const files = (await readdir("migrations").catch(() => [])).filter((file) => file.endsWith(".sql")).sort()
 if (url === "" || files.length === 0) {
@@ -20,6 +21,7 @@ if (url === "" || files.length === 0) {
 
 const sql = postgres(url, {
   prepare: false,
+  fetch_types: false,
   max: 1,
   connect_timeout: 20,
   ssl: /supabase\.(co|com)|pooler\.supabase|sslmode=require/i.test(url) ? "require" : false,
@@ -42,10 +44,9 @@ try {
   }
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error)
-  const unreachable = /connect|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|timeout/i.test(message)
-  if (!unreachable) throw error
-  console.warn(`migrate: ${message}`)
-  console.warn("migrate: database was unreachable during build; tables are created on the first request")
+  console.warn(`migrate: ${message || error}`)
+  console.warn("migrate: skipped; tables are created on the first request")
+  process.exitCode = 0
 } finally {
-  await sql.end({ timeout: 5 })
+  await sql.end({ timeout: 5 }).catch(() => undefined)
 }

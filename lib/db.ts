@@ -29,6 +29,10 @@ function needsSsl(url: string) {
   return /supabase\.(co|com)|pooler\.supabase|sslmode=require/i.test(url)
 }
 
+function cleanDatabaseUrl(url: string) {
+  return url.replace(/([?&])pgbouncer=(?:true|false)&?/gi, "$1").replace(/[?&]$/, "")
+}
+
 function statements(source: string) {
   return source
     .split(";")
@@ -58,8 +62,9 @@ async function applyMigrations(db: Remote) {
 async function remote() {
   const url = pooledDatabaseUrl()
   if (!url) return null
-  holders.uxReviewPg ??= postgres(url, {
+  holders.uxReviewPg ??= postgres(cleanDatabaseUrl(url), {
     prepare: false,
+    fetch_types: false,
     max: 1,
     idle_timeout: 20,
     connect_timeout: 15,
