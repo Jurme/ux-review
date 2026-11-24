@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { SendDesignLink } from "@/components/reviews/create-review"
 import { useMemo, useState } from "react"
 import { Plus, Search } from "lucide-react"
 import { AvatarStack, EmptyState, PageHeader, PhasePill, pageWrap, ProgressBar } from "@/components/common"
@@ -47,10 +48,10 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
         }
         action={
           archive ? undefined : (
-            <Link href="/reviews/new" className={cn(buttonVariants({ size: "lg" }))}>
+            <SendDesignLink className={cn(buttonVariants({ size: "lg" }))}>
               <Plus />
               Send a design
-            </Link>
+            </SendDesignLink>
           )
         }
       />

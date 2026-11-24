@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { X } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar } from "@/components/common"
@@ -21,7 +21,24 @@ const WINDOWS = [
 ]
 
 export function CreateReview() {
-  return <SendForm />
+  const fresh = useSearchParams().get("new") ?? "blank"
+  return <SendForm key={fresh} />
+}
+
+export function SendDesignLink({ className, children }: { className?: string; children: React.ReactNode }) {
+  const router = useRouter()
+  return (
+    <Link
+      href="/reviews/new"
+      className={className}
+      onClick={(event) => {
+        event.preventDefault()
+        router.push(`/reviews/new?new=${crypto.randomUUID()}`)
+      }}
+    >
+      {children}
+    </Link>
+  )
 }
 
 function SendForm() {
@@ -91,6 +108,12 @@ function SendForm() {
       return
     }
     toast.success(result.message)
+    setTitle("")
+    setProject("")
+    setFigma("")
+    setNote("")
+    setQuery("")
+    setReviewerIds(null)
     if (result.id) router.push(`/reviews/${result.id}`)
     else router.push("/reviews")
   }
@@ -101,9 +124,9 @@ function SendForm() {
       <p className="mt-1 text-[14px] text-[#717171]">
         The review is stamped with the date and time you send it. Reviewers then have the window you choose.
       </p>
-      <div className="mt-6 rounded-[20px] border border-[#EBEBEB] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+      <form className="mt-6 rounded-[20px] border border-[#EBEBEB] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]" autoComplete="off" onSubmit={(event) => event.preventDefault()}>
         <label className="mt-1 block text-[13px] font-semibold">Project</label>
-        <select className="field" value={project} onChange={(event) => setProject(event.target.value)}>
+        <select className="field" name="ux-review-project" autoComplete="off" value={project} onChange={(event) => setProject(event.target.value)}>
           <option value="">Choose a project</option>
           {projects.map((item) => (
             <option key={item}>{item}</option>
@@ -115,9 +138,9 @@ function SendForm() {
           </p>
         ) : null}
         <label className="field-label">Review title</label>
-        <input className="field" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Access management flow" />
+        <input className="field" name="ux-review-title" autoComplete="off" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Access management flow" />
         <label className="field-label">Figma link</label>
-        <input className="field" value={figma} onChange={(event) => setFigma(event.target.value)} placeholder="https://figma.com/design/…" />
+        <input className="field" name="ux-review-figma" autoComplete="off" value={figma} onChange={(event) => setFigma(event.target.value)} placeholder="https://figma.com/design/…" />
         <label className="field-label">Reviewers have</label>
         <select className="field" value={windowDays} onChange={(event) => setWindowDays(Number(event.target.value))}>
           {WINDOWS.map((item) => (
@@ -179,7 +202,7 @@ function SendForm() {
           </>
         )}
         <label className="field-label">Note to reviewers (optional)</label>
-        <textarea className="field min-h-[76px]" value={note} onChange={(event) => setNote(event.target.value)} />
+        <textarea className="field min-h-[76px]" name="ux-review-note" autoComplete="off" value={note} onChange={(event) => setNote(event.target.value)} />
         <p className="mt-4 text-[13px] text-[#717171]">
           {selected.length} reviewer{selected.length === 1 ? "" : "s"} · due {addDaysISO(todayISO(), windowDays)} if you send it now
         </p>
@@ -188,7 +211,7 @@ function SendForm() {
           <button type="button" className={cn("btn", tap)} onClick={() => submit("draft")}>Save as draft</button>
           <button type="button" className={cn("btn btn-primary", tap)} onClick={() => submit("publish")}>Send to reviewers</button>
         </div>
-      </div>
+      </form>
     </div>
   )
 }

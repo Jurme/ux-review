@@ -20,6 +20,7 @@ import {
   windowLabel,
 } from "@/lib/format"
 import { PHASE_META, PHASE_ORDER, tap } from "@/lib/presentation"
+import { SendDesignLink } from "@/components/reviews/create-review"
 import { rescheduleReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import type { Review } from "@/lib/types"
@@ -95,10 +96,10 @@ export function CalendarBoard() {
         title={label}
         description="Reviews sit on the day they are due. Drag a review to move that deadline, or click a day to send a new one."
         action={
-          <Link href="/reviews/new" className={cn(buttonVariants({ size: "lg" }))}>
+          <SendDesignLink className={cn(buttonVariants({ size: "lg" }))}>
             <Plus />
             Send a design
-          </Link>
+          </SendDesignLink>
         }
       />
 
@@ -179,7 +180,7 @@ export function CalendarBoard() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-medium">{formatWeekday(cursor)}</h2>
               {toISODate(cursor) >= today ? (
-                <button type="button" className={cn("text-[13px] font-medium", tap)} onClick={() => router.push("/reviews/new")}>
+                <button type="button" className={cn("text-[13px] font-medium", tap)} onClick={() => router.push(`/reviews/new?new=${globalThis.crypto.randomUUID()}`)}>
                   Send a review
                 </button>
               ) : (
@@ -331,15 +332,14 @@ function MonthGrid({
                     className={cn("border-r border-[#EBEBEB] last:border-r-0", dropDate === iso && dragging && "bg-[#F7F7F7]")}
                   >
                     {iso >= today ? (
-                      <Link
-                        href="/reviews/new"
+                      <SendDesignLink
                         className={cn(
                           "m-2 inline-flex size-7 items-center justify-center rounded-full text-[13px]",
                           iso === today ? "bg-[#FF385C] font-medium text-white" : outside ? "text-[#B0B0B0]" : "text-[#222] hover:bg-[#F7F7F7]",
                         )}
                       >
                         {day.getDate()}
-                      </Link>
+                      </SendDesignLink>
                     ) : (
                       <span
                         className={cn(
@@ -465,9 +465,9 @@ function ColumnGrid({
             className={cn("min-h-[420px] rounded-2xl border border-[#EBEBEB] p-2", dropDate === iso && dragging && "bg-[#F7F7F7]")}
           >
             {iso >= today ? (
-              <Link href="/reviews/new" className={cn("mb-2 inline-flex rounded-full px-2 py-1 text-[12px] font-medium", iso === today ? "bg-[#FF385C] text-white" : "text-[#717171] hover:bg-[#F7F7F7]")}>
+              <SendDesignLink className={cn("mb-2 inline-flex rounded-full px-2 py-1 text-[12px] font-medium", iso === today ? "bg-[#FF385C] text-white" : "text-[#717171] hover:bg-[#F7F7F7]")}>
                 {formatWeekday(day)}
-              </Link>
+              </SendDesignLink>
             ) : (
               <span className="mb-2 inline-flex rounded-full px-2 py-1 text-[12px] font-medium text-[#717171]">{formatWeekday(day)}</span>
             )}

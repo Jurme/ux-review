@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { SendDesignLink } from "@/components/reviews/create-review"
 import { Plus } from "lucide-react"
 import { AvatarStack, PageHeader, PhasePill, pageWrap, ProgressBar } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
@@ -65,10 +66,10 @@ export function DashboardView() {
         title={greeting(user.name)}
         description={line}
         action={
-          <Link href="/reviews/new" className={cn(buttonVariants({ size: "lg" }))}>
+          <SendDesignLink className={cn(buttonVariants({ size: "lg" }))}>
             <Plus />
             Send a design
-          </Link>
+          </SendDesignLink>
         }
       />
 
