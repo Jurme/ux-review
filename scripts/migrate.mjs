@@ -1,35 +1,51 @@
 import { readdir, readFile } from "node:fs/promises"
-import pg from "pg"
+import postgres from "postgres"
 
-const url = process.env.DATABASE_URL?.trim() ?? ""
-const files = (await readdir("migrations").catch(() => []))
-  .filter((file) => file.endsWith(".sql"))
-  .sort()
+function read(name) {
+  return process.env[name]?.trim() ?? ""
+}
+
+const url =
+  read("POSTGRES_URL_NON_POOLING") ||
+  read("DATABASE_URL_UNPOOLED") ||
+  read("POSTGRES_URL") ||
+  read("POSTGRES_PRISMA_URL") ||
+  read("DATABASE_URL")
+
+const files = (await readdir("migrations").catch(() => [])).filter((file) => file.endsWith(".sql")).sort()
 if (url === "" || files.length === 0) {
   console.log("migrate: nothing to do")
   process.exit(0)
 }
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL_UNPOOLED?.trim() || url })
-await client.connect()
+
+const sql = postgres(url, {
+  prepare: false,
+  max: 1,
+  connect_timeout: 20,
+  ssl: /supabase\.(co|com)|pooler\.supabase|sslmode=require/i.test(url) ? "require" : false,
+})
+
 try {
-  await client.query("set lock_timeout = '60s'")
-  await client.query("select pg_advisory_lock(7272741)")
-  await client.query(
+  await sql.unsafe(
     "create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())",
   )
-  const done = new Set((await client.query("select name from schema_migrations")).rows.map((row) => row.name))
+  const done = new Set((await sql.unsafe("select name from schema_migrations")).map((row) => row.name))
   for (const file of files.filter((name) => !done.has(name))) {
-    await client.query("begin")
-    try {
-      await client.query(await readFile(`migrations/${file}`, "utf8"))
-      await client.query("insert into schema_migrations (name) values ($1)", [file])
-      await client.query("commit")
-      console.log(`migrate: applied ${file}`)
-    } catch (error) {
-      await client.query("rollback")
-      throw error
-    }
+    const source = await readFile(`migrations/${file}`, "utf8")
+    const parts = source
+      .split(";")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0)
+    for (const statement of parts) await sql.unsafe(statement)
+    await sql.unsafe("insert into schema_migrations (name) values ($1) on conflict (name) do nothing", [file])
+    console.log(`migrate: applied ${file}`)
   }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error)
+  const unreachable = /connect|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|timeout/i.test(message)
+  if (!unreachable) throw error
+  console.warn(`migrate: ${message}`)
+  console.warn("migrate: database was unreachable during build; tables are created on the first request")
 } finally {
-  await client.end()
+  await sql.end({ timeout: 5 })
 }

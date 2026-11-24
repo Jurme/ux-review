@@ -19,7 +19,7 @@ The welcome screen has Sign in and Sign up. Sign in asks for email and password.
 
 The first person to sign in becomes the admin of an empty workspace. Anyone who signs in after that joins as themselves. Projects and criteria are added in Settings. Reviewers are people who have already signed in.
 
-Accounts and the workspace are kept in `.data/` on this machine when `DATABASE_URL` is unset, so sign-in still works after the server restarts. Published copies use Postgres.
+Accounts and the workspace are stored in Supabase. On this machine, with no Supabase URL set, they stay in `.data/` so you can still sign in after a restart.
 
 ## What you can do
 
@@ -32,6 +32,14 @@ Accounts and the workspace are kept in `.data/` on this machine when `DATABASE_U
 
 Settings can load a Sunrise Studio sample. You stay signed in as yourself.
 
+## Deploy on Vercel
+
+Create a Supabase project, then either install the Supabase integration on the Vercel project or set the env vars yourself.
+
+Set `POSTGRES_URL` to the **Transaction pooler** connection string (host `pooler.supabase.com`, port `6543`). The Vercel integration sets this for you. Also set `AUTH_SECRET` to a long random string so sessions stay valid across servers.
+
+Tables are created on the first request. `POSTGRES_URL_NON_POOLING` is optional and is used for the build-time migration when that host can be reached.
+
 ## Stack
 
-Next.js, React, TypeScript, and Tailwind. Interface primitives come from shadcn/ui. Sign-in is email and password through Auth.js. The workspace is stored in Postgres when the app is published, and in `.data/` during local development.
+Next.js, React, TypeScript, and Tailwind. Interface primitives come from shadcn/ui. Sign-in is email and password through Auth.js. The workspace is stored in Supabase Postgres. Local development without `POSTGRES_URL` uses `.data/`.
