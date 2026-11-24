@@ -612,19 +612,7 @@ export function createSeed(): AppState {
     },
     users,
     criteria,
-    templates: [
-      { id: "tpl_standard", name: "Standard UX review", criteriaIds: standard },
-      {
-        id: "tpl_a11y",
-        name: "Accessibility pass",
-        criteriaIds: ["crit_usability", "crit_a11y", "crit_states", "crit_edge"],
-      },
-      {
-        id: "tpl_ui",
-        name: "UI consistency",
-        criteriaIds: ["crit_visual", "crit_system", "crit_edge"],
-      },
-    ],
+    templates: [],
     reviews,
     feedback,
     notifications: [
