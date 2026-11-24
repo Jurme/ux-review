@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { X } from "lucide-react"
 import { toast } from "sonner"
@@ -22,7 +22,12 @@ const WINDOWS = [
 export function CreateReview() {
   const params = useSearchParams()
   const initial = params.get("date")
-  const sendDefault = initial && /^\d{4}-\d{2}-\d{2}$/.test(initial) ? initial : todayISO()
+  const fromQuery = initial && /^\d{4}-\d{2}-\d{2}$/.test(initial) ? initial : ""
+  const [sendDefault, setSendDefault] = useState(fromQuery)
+  useEffect(() => {
+    if (!sendDefault) setSendDefault(todayISO())
+  }, [sendDefault])
+  if (!sendDefault) return null
   return <SendForm key={sendDefault} sendDefault={sendDefault} />
 }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { AvatarStack, EmptyState, PageHeader, PhasePill, pageWrap } from "@/components/common"
@@ -28,7 +28,10 @@ type View = "month" | "week" | "day"
 export function CalendarBoard() {
   const { user, users, reviews } = useWorkspace()
   const router = useRouter()
-  const [cursor, setCursor] = useState(() => new Date())
+  const [cursor, setCursor] = useState<Date | null>(null)
+  useEffect(() => {
+    setCursor((current) => current ?? new Date())
+  }, [])
   const [view, setView] = useState<View>("month")
   const [project, setProject] = useState("all")
   const [owner, setOwner] = useState("all")
@@ -38,7 +41,8 @@ export function CalendarBoard() {
   const [dropDate, setDropDate] = useState<string | null>(null)
 
   const people = useMemo(() => new Map(users.map((person) => [person.id, person])), [users])
-  if (!user) return null
+  if (!user || !cursor) return null
+  const focus = cursor
 
   const visible = reviews.filter((review) => {
     if (!canSeeReview(user, review)) return false
@@ -52,7 +56,7 @@ export function CalendarBoard() {
   const projects = [...new Set(reviews.map((review) => review.project))].sort()
 
   function shift(direction: number) {
-    const next = new Date(cursor)
+    const next = new Date(focus)
     if (view === "month") next.setMonth(next.getMonth() + direction)
     else if (view === "week") next.setDate(next.getDate() + direction * 7)
     else next.setDate(next.getDate() + direction)
