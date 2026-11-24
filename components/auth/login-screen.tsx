@@ -143,6 +143,7 @@ export function LoginScreen() {
       ) : null}
       <form
         className="mt-8 space-y-3"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault()
           void submitEmail()
@@ -152,7 +153,8 @@ export function LoginScreen() {
           <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" autoComplete="name" aria-label="Name" />
         ) : null}
         <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" autoComplete="email" aria-label="Email" />
-        <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete={mode === "sign-up" ? "new-password" : "current-password"} aria-label="Password" />
+        <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete={mode === "sign-up" ? "new-password" : "current-password"} aria-label="Password" minLength={8} />
+        {mode === "sign-up" ? <p className="text-[13px] text-[#717171]">Use at least 8 characters.</p> : null}
         <button type="submit" className={cn("btn btn-primary w-full", tap)} disabled={pending}>
           {pending ? "Please wait…" : mode === "sign-in" ? "Sign in" : "Create account"}
         </button>
