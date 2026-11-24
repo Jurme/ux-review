@@ -1,5 +1,6 @@
 import { auth } from "@/auth"
 import { bindSession, emptyWorkspace, isState, type Profile } from "@/lib/access"
+import { findCredential } from "@/lib/credentials"
 import { sql } from "@/lib/db"
 import * as mutations from "@/lib/mutations"
 import type { AppState, Mutation } from "@/lib/types"
@@ -105,8 +106,24 @@ export async function mutateWorkspace(profile: Profile, action: ActionName, args
   const opened = await openWorkspace(profile)
   if (!opened.ok) return opened
   if (opened.revision !== expected) return { ok: false as const, error: "conflict" as const }
+  let nextArgs = args
+  if (action === "inviteMember") {
+    const input = (args[0] ?? {}) as { email?: unknown }
+    const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : ""
+    const account = email ? await findCredential(email) : null
+    if (!account) {
+      return {
+        ok: false as const,
+        error: "rejected" as const,
+        message: "Only people who have signed in can be added. Ask them to create an account first.",
+        state: opened.state,
+        revision: opened.revision,
+      }
+    }
+    nextArgs = [{ name: account.name, email: account.email }]
+  }
   const run = actions[action] as (state: AppState, ...rest: unknown[]) => Mutation
-  const result = run(opened.state, ...args)
+  const result = run(opened.state, ...nextArgs)
   if (!result.ok) return { ok: false as const, error: "rejected" as const, message: result.message, state: opened.state, revision: opened.revision }
   const revision = await updateRow(result.state, opened.revision)
   if (!revision) return { ok: false as const, error: "conflict" as const }

@@ -15,6 +15,7 @@ import {
   formatWeekday,
   monthWeeks,
   startOfWeek,
+  todayISO,
   toISODate,
   windowLabel,
 } from "@/lib/format"
@@ -43,6 +44,7 @@ export function CalendarBoard() {
   const people = useMemo(() => new Map(users.map((person) => [person.id, person])), [users])
   if (!user || !cursor) return null
   const focus = cursor
+  const today = todayISO()
 
   const visible = reviews.filter((review) => {
     if (!canSeeReview(user, review)) return false
@@ -64,6 +66,12 @@ export function CalendarBoard() {
   }
 
   async function move(id: string, date: string) {
+    if (date < today) {
+      toast.error("Choose today or a later day.")
+      setDragging(null)
+      setDropDate(null)
+      return
+    }
     const review = reviews.find((item) => item.id === id)
     if (!review || !isManager(user, review)) return
     const result = await rescheduleReview(id, date)
@@ -150,12 +158,14 @@ export function CalendarBoard() {
             onDragEnd={() => { setDragging(null); setDropDate(null) }}
             onHover={setDropDate}
             onDrop={move}
+            today={today}
           />
         ) : null}
         {view === "week" ? (
           <ColumnGrid
             days={Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(cursor), index))}
             reviews={visible}
+            today={today}
             dragging={dragging}
             dropDate={dropDate}
             onDragStart={setDragging}
@@ -168,9 +178,13 @@ export function CalendarBoard() {
           <div className="rounded-2xl border border-[#EBEBEB] p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-medium">{formatWeekday(cursor)}</h2>
-              <button type="button" className={cn("text-[13px] font-medium", tap)} onClick={() => router.push(`/reviews/new?date=${toISODate(cursor)}`)}>
-                Create on this day
-              </button>
+              {toISODate(cursor) >= today ? (
+                <button type="button" className={cn("text-[13px] font-medium", tap)} onClick={() => router.push("/reviews/new")}>
+                  Send a review
+                </button>
+              ) : (
+                <span className="text-[13px] text-[#717171]">Past days stay open for the reviews already due.</span>
+              )}
             </div>
             <Agenda
               reviews={visible.filter((review) => review.deadline === toISODate(cursor))}
@@ -269,6 +283,7 @@ function MonthGrid({
   onDragEnd,
   onHover,
   onDrop,
+  today,
 }: {
   cursor: Date
   reviews: Review[]
@@ -278,9 +293,9 @@ function MonthGrid({
   onDragEnd: () => void
   onHover: (date: string) => void
   onDrop: (id: string, date: string) => void
+  today: string
 }) {
   const weeks = monthWeeks(cursor)
-  const today = toISODate(new Date())
   const dragged = useRef(false)
   return (
     <div className="overflow-hidden rounded-2xl border border-[#EBEBEB]">
@@ -315,15 +330,26 @@ function MonthGrid({
                     }}
                     className={cn("border-r border-[#EBEBEB] last:border-r-0", dropDate === iso && dragging && "bg-[#F7F7F7]")}
                   >
-                    <Link
-                      href={`/reviews/new?date=${iso}`}
-                      className={cn(
-                        "m-2 inline-flex size-7 items-center justify-center rounded-full text-[13px]",
-                        iso === today ? "bg-[#FF385C] font-medium text-white" : outside ? "text-[#B0B0B0]" : "text-[#222] hover:bg-[#F7F7F7]",
-                      )}
-                    >
-                      {day.getDate()}
-                    </Link>
+                    {iso >= today ? (
+                      <Link
+                        href="/reviews/new"
+                        className={cn(
+                          "m-2 inline-flex size-7 items-center justify-center rounded-full text-[13px]",
+                          iso === today ? "bg-[#FF385C] font-medium text-white" : outside ? "text-[#B0B0B0]" : "text-[#222] hover:bg-[#F7F7F7]",
+                        )}
+                      >
+                        {day.getDate()}
+                      </Link>
+                    ) : (
+                      <span
+                        className={cn(
+                          "m-2 inline-flex size-7 items-center justify-center rounded-full text-[13px]",
+                          outside ? "text-[#B0B0B0]" : "text-[#222]",
+                        )}
+                      >
+                        {day.getDate()}
+                      </span>
+                    )}
                   </div>
                 )
               })}
@@ -405,6 +431,7 @@ function ColumnGrid({
   onDragEnd,
   onHover,
   onDrop,
+  today,
 }: {
   days: Date[]
   reviews: Review[]
@@ -414,8 +441,8 @@ function ColumnGrid({
   onDragEnd: () => void
   onHover: (date: string) => void
   onDrop: (id: string, date: string) => void
+  today: string
 }) {
-  const today = toISODate(new Date())
   const dragged = useRef(false)
   return (
     <div className="grid grid-cols-7 gap-2">
@@ -437,9 +464,13 @@ function ColumnGrid({
             }}
             className={cn("min-h-[420px] rounded-2xl border border-[#EBEBEB] p-2", dropDate === iso && dragging && "bg-[#F7F7F7]")}
           >
-            <Link href={`/reviews/new?date=${iso}`} className={cn("mb-2 inline-flex rounded-full px-2 py-1 text-[12px] font-medium", iso === today ? "bg-[#FF385C] text-white" : "text-[#717171] hover:bg-[#F7F7F7]")}>
-              {formatWeekday(day)}
-            </Link>
+            {iso >= today ? (
+              <Link href="/reviews/new" className={cn("mb-2 inline-flex rounded-full px-2 py-1 text-[12px] font-medium", iso === today ? "bg-[#FF385C] text-white" : "text-[#717171] hover:bg-[#F7F7F7]")}>
+                {formatWeekday(day)}
+              </Link>
+            ) : (
+              <span className="mb-2 inline-flex rounded-full px-2 py-1 text-[12px] font-medium text-[#717171]">{formatWeekday(day)}</span>
+            )}
             <div className="space-y-2">
               {items.map((review) => (
                 <Link

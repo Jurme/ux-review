@@ -13,7 +13,6 @@ export function LoginScreen() {
   const { ready, user, gate, inviteEmail } = useWorkspace()
   const router = useRouter()
   const params = useSearchParams()
-  const [mode, setMode] = useState<"sign-in" | "create">("sign-in")
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -42,6 +41,23 @@ export function LoginScreen() {
 
   const error = params.get("error")
 
+  async function finishSignIn() {
+    let result
+    try {
+      result = await signIn("credentials", { email, password, redirect: false, redirectTo: "/dashboard" })
+    } catch {
+      const message = "Sign-in didn’t finish. Try again."
+      setNotice(message)
+      toast.error(message)
+      return true
+    }
+    if (!result || result.error || result.ok === false) return false
+    await refreshWorkspace()
+    router.push("/dashboard")
+    router.refresh()
+    return true
+  }
+
   async function submitEmail() {
     if (!email.trim() || !password) {
       setNotice("Enter your email and password.")
@@ -50,38 +66,30 @@ export function LoginScreen() {
     setNotice("")
     setPending(true)
     try {
-      if (mode === "create") {
-        const response = await fetch("/api/register", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ name, email, password }),
-        })
-        const body = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null
-        if (!response.ok || !body?.ok) {
-          const message = body?.message || "Could not create the account."
-          setNotice(message)
-          toast.error(message)
-          return
-        }
-      }
-      let result
-      try {
-        result = await signIn("credentials", { email, password, redirect: false, redirectTo: "/dashboard" })
-      } catch {
-        const message = "Sign-in didn’t finish. Try again."
+      if (await finishSignIn()) return
+      const response = await fetch("/api/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      })
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null
+      if (response.status === 409) {
+        const message = "That email or password is wrong."
         setNotice(message)
         toast.error(message)
         return
       }
-      if (!result || result.error || result.ok === false) {
-        const message = mode === "create" ? "Account created, but sign-in did not finish. Try again." : "That email or password is wrong."
+      if (!response.ok || !body?.ok) {
+        const message = body?.message || "Enter your name to create an account."
         setNotice(message)
         toast.error(message)
         return
       }
-      await refreshWorkspace()
-      router.push("/dashboard")
-      router.refresh()
+      if (!(await finishSignIn())) {
+        const message = "Account created, but sign-in did not finish. Try again."
+        setNotice(message)
+        toast.error(message)
+      }
     } finally {
       setPending(false)
     }
@@ -139,23 +147,14 @@ export function LoginScreen() {
           void submitEmail()
         }}
       >
-        {mode === "create" ? (
-          <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" autoComplete="name" aria-label="Name" />
-        ) : null}
+        <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name, if this is your first time" autoComplete="name" aria-label="Name" />
         <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" autoComplete="email" aria-label="Email" />
-        <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete={mode === "create" ? "new-password" : "current-password"} aria-label="Password" />
+        <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete="current-password" aria-label="Password" />
         <button type="submit" className={cn("btn btn-primary w-full", tap)} disabled={pending}>
-          {pending ? "Please wait…" : mode === "create" ? "Create account" : "Sign in with email"}
+          {pending ? "Please wait…" : "Continue"}
         </button>
       </form>
-      <button
-        type="button"
-        className={cn("mt-4 text-[13px] font-medium text-[#717171]", tap)}
-        onClick={() => setMode((current) => (current === "sign-in" ? "create" : "sign-in"))}
-      >
-        {mode === "create" ? "Already have an account? Sign in" : "New here? Create an account"}
-      </button>
-      <p className="mt-4 text-[13px] text-[#717171]">The first person to sign in becomes the admin and can invite everyone else by email.</p>
+      <p className="mt-4 text-[13px] text-[#717171]">Use the same email next time. A new email creates your account and opens the workspace.</p>
     </Shell>
   )
 }

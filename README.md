@@ -17,7 +17,7 @@ Open the local URL printed by Next.js. The dev server uses port **3847**.
 
 The welcome screen signs you in with Google, Microsoft, or email and password. You arrive as that account. There is no list of people to pick from. Email and password stay available when Google or Microsoft cannot complete.
 
-The first person to sign in becomes the admin of an empty workspace. They add projects, criteria, and reviewers from Settings. An invited reviewer signs in with the same email and sees the reviews assigned to them.
+The first person to sign in becomes the admin of an empty workspace. Anyone who signs in after that joins as themselves. Projects and criteria are added in Settings. Reviewers are people who have already signed in.
 
 Google and Microsoft need these redirect URLs in each provider:
 

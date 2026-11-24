@@ -56,16 +56,30 @@ export function Sidebar({
 
   return (
     <div className={cn("flex h-full flex-col py-4", collapsed ? "px-2" : "px-3")}>
-      <div className={cn("flex items-center", collapsed ? "flex-col gap-3" : "justify-between px-1")}>
-        <Link href="/dashboard" className="flex items-center gap-2" onClick={onNavigate} title="UX Review">
-          <Mark />
-          {collapsed ? null : <span className="text-[15px] font-semibold tracking-tight">UX Review</span>}
-        </Link>
-        {onToggle ? (
-          <button type="button" className={cn("grid size-9 place-items-center rounded-full hover:bg-black/5", tap)} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={onToggle}>
-            <PanelLeft className="size-4" />
-          </button>
-        ) : null}
+      <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between px-1")}>
+        {collapsed ? (
+          onToggle ? (
+            <button type="button" className={cn("grid size-9 place-items-center rounded-full hover:bg-black/5", tap)} aria-label="Expand sidebar" onClick={onToggle}>
+              <PanelLeft className="size-4" />
+            </button>
+          ) : (
+            <Link href="/dashboard" onClick={onNavigate} title="UX Review">
+              <Mark />
+            </Link>
+          )
+        ) : (
+          <>
+            <Link href="/dashboard" className="flex items-center gap-2" onClick={onNavigate} title="UX Review">
+              <Mark />
+              <span className="text-[15px] font-semibold tracking-tight">UX Review</span>
+            </Link>
+            {onToggle ? (
+              <button type="button" className={cn("grid size-9 place-items-center rounded-full hover:bg-black/5", tap)} aria-label="Collapse sidebar" onClick={onToggle}>
+                <PanelLeft className="size-4" />
+              </button>
+            ) : null}
+          </>
+        )}
       </div>
       <nav className="mt-6 flex-1 space-y-1" aria-label="Primary">
         {items.map((item) => {

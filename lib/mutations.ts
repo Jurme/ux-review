@@ -6,7 +6,7 @@ import {
   validateReview,
 } from "@/lib/domain"
 import { createSeed } from "@/lib/seed"
-import { clip, formatDay, isEmail, normalizeHttpUrl, todayISO, uid } from "@/lib/format"
+import { addDaysISO, clip, diffDays, formatDay, isEmail, normalizeHttpUrl, todayISO, uid } from "@/lib/format"
 import type {
   Activity,
   AppState,
@@ -111,11 +111,13 @@ function reviewersFrom(
   const reviewers: ReviewerAssignment[] = []
   for (const reviewer of draft.reviewers) {
     if (seen.has(reviewer.userId)) continue
-    if (!state.users.some((user) => user.id === reviewer.userId)) {
-      return "One of the reviewers is no longer in the workspace."
+    const member = state.users.find((user) => user.id === reviewer.userId)
+    if (!member) return "One of the reviewers is no longer in the workspace."
+    const previous = existing?.reviewers.find((item) => item.userId === reviewer.userId)
+    if (member.accountStatus !== "active" && !previous) {
+      return "Only people who have signed in can be added as reviewers."
     }
     seen.add(reviewer.userId)
-    const previous = existing?.reviewers.find((item) => item.userId === reviewer.userId)
     reviewers.push({
       userId: reviewer.userId,
       focus: clip(reviewer.focus, 80),
@@ -157,9 +159,9 @@ export function saveReview(
     figmaUrl: normalizeHttpUrl(draft.figmaUrl),
     designVersion: clip(draft.designVersion, 40),
     referenceUrls: draft.referenceUrls.map((url) => normalizeHttpUrl(url)).filter(Boolean),
-    startDate: draft.startDate,
-    deadline: draft.deadline,
-    startTime: draft.startTime,
+    startDate: publishing ? todayISO() : draft.startDate,
+    deadline: publishing ? addDaysISO(todayISO(), Math.max(draft.startDate && draft.deadline ? diffDays(draft.startDate, draft.deadline) : 0, 0)) : draft.deadline,
+    startTime: publishing ? currentTime() : draft.startTime,
     endTime: draft.endTime,
     timezone: draft.timezone || state.workspace.timezone,
     reminderHours: draft.reminderHours,
@@ -599,6 +601,11 @@ export function deleteTemplate(state: AppState, id: string): Mutation {
   return done({ ...state, templates: state.templates.filter((item) => item.id !== id) }, "Template removed.")
 }
 
+function currentTime() {
+  const now = new Date()
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
+}
+
 export function inviteMember(state: AppState, input: { name: string; email: string }): Mutation {
   if (!actor(state)) return same(state, "Sign in to invite someone.")
   const email = clip(input.email, 120).toLowerCase()
@@ -612,12 +619,12 @@ export function inviteMember(state: AppState, input: { name: string; email: stri
     name: clip(input.name, 80) || fallback,
     email,
     role: "member" as const,
-    title: "Reviewer",
-    accountStatus: "invited" as const,
+    title: "",
+    accountStatus: "active" as const,
   }
   return done(
     { ...state, users: [...state.users, user] },
-    `${user.name} is invited. They can open an assigned review after signing in with this email.`,
+    `${user.name} is in the workspace.`,
     user.id,
   )
 }

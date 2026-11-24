@@ -55,7 +55,24 @@ export function bindSession(
   const existing = state.users.find((user) => user.email.toLowerCase() === email)
   if (!existing) {
     if (state.users.length === 0) return { ok: true, state: emptyWorkspace(profile), activate: true }
-    return { ok: false, error: "invite_required" }
+    const member: User = {
+      id: uid("user"),
+      name: profile.name.trim() || email,
+      email,
+      role: "member",
+      title: "",
+      accountStatus: "active",
+    }
+    return {
+      ok: true,
+      activate: true,
+      state: {
+        ...state,
+        currentUserId: member.id,
+        provider: profile.provider,
+        users: [...state.users, member],
+      },
+    }
   }
   const name = existing.accountStatus === "invited" && profile.name.trim() ? profile.name.trim() : existing.name
   const activate = existing.accountStatus !== "active" || existing.name !== name
