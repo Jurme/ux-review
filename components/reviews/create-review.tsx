@@ -3,7 +3,9 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { X } from "lucide-react"
 import { toast } from "sonner"
+import { Avatar } from "@/components/common"
 import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/constants"
 import { addDaysISO, todayISO } from "@/lib/format"
 import { tap } from "@/lib/presentation"
@@ -30,7 +32,8 @@ function SendForm() {
   const [figma, setFigma] = useState("")
   const [note, setNote] = useState("")
   const [windowDays, setWindowDays] = useState(3)
-  const [reviewerIds, setReviewerIds] = useState<string[]>([])
+  const [reviewerIds, setReviewerIds] = useState<string[] | null>(null)
+  const [query, setQuery] = useState("")
   const [reminder, setReminder] = useState(() => {
     const current = String(workspace?.reminderHours ?? "")
     return REMINDER_OPTIONS.some((item) => item.value === current) ? Number(current) : DEFAULT_REMINDER_MINUTES
@@ -43,9 +46,22 @@ function SendForm() {
 
   if (!user || !workspace) return null
   const signedIn = users.filter((person) => person.accountStatus === "active" && person.id !== user.id)
+  const selectedIds = reviewerIds ?? signedIn.map((person) => person.id)
+  const selected = selectedIds.map((id) => signedIn.find((person) => person.id === id)).filter((person) => person !== undefined)
+  const suggestions = query.trim()
+    ? signedIn.filter((person) => !selectedIds.includes(person.id) && `${person.name} ${person.email}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6)
+    : signedIn.filter((person) => !selectedIds.includes(person.id))
 
-  function toggleReviewer(id: string) {
-    setReviewerIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]))
+  function removeReviewer(id: string) {
+    setReviewerIds((current) => (current ?? signedIn.map((person) => person.id)).filter((item) => item !== id))
+  }
+
+  function addReviewer(id: string) {
+    setReviewerIds((current) => {
+      const base = current ?? signedIn.map((person) => person.id)
+      return base.includes(id) ? base : [...base, id]
+    })
+    setQuery("")
   }
 
   async function submit(mode: "draft" | "publish") {
@@ -67,7 +83,7 @@ function SendForm() {
       reminderHours: reminder,
       shareFeedback: true,
       criteriaIds: [],
-      reviewers: reviewerIds.map((userId) => ({ userId, focus: "General" })),
+      reviewers: selectedIds.map((userId) => ({ userId, focus: "General" })),
     }
     const result = await saveReview(draft, mode)
     if (!result.ok) {
@@ -115,42 +131,57 @@ function SendForm() {
           ))}
         </select>
         <label className="field-label">Reviewers</label>
-        <p className="text-[13px] text-[#717171]">People who have signed in. Add the ones who should review this design.</p>
+        <p className="text-[13px] text-[#717171]">Everyone who has signed in is included. Remove anyone who should sit this one out, then add them back from the field.</p>
         {signedIn.length === 0 ? (
           <p className="mt-3 text-[13px] text-[#717171]">No one else has signed in yet.</p>
         ) : (
-          <div className="mt-2 overflow-x-auto rounded-[12px] border border-[#EBEBEB]">
-            <table className="w-full min-w-[420px] text-left text-[14px]">
-              <thead className="bg-[#F7F7F7] text-[12px] text-[#717171]">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Add</th>
-                  <th className="px-3 py-2 font-medium">Name</th>
-                  <th className="px-3 py-2 font-medium">Email</th>
-                </tr>
-              </thead>
-              <tbody>
-                {signedIn.map((person) => {
-                  const added = reviewerIds.includes(person.id)
-                  return (
-                    <tr key={person.id} className="border-t border-[#EBEBEB]">
-                      <td className="px-3 py-2">
-                        <button type="button" className={cn("btn btn-sm", added && "btn-primary", tap)} onClick={() => toggleReviewer(person.id)}>
-                          {added ? "Added" : "Add"}
-                        </button>
-                      </td>
-                      <td className="px-3 py-2 font-medium">{person.name}</td>
-                      <td className="px-3 py-2 text-[#717171]">{person.email}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-[12px] border border-[#EBEBEB] bg-white px-2 py-2">
+              {selected.map((person) => (
+                <span key={person.id} className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#F1F3F4] py-0.5 pr-1 pl-1 text-[13px] font-medium text-[#222]">
+                  <Avatar user={person} size={20} />
+                  <span className="truncate px-0.5">{person.name}</span>
+                  <button type="button" className={cn("grid size-5 shrink-0 place-items-center rounded-full text-[#5F6368] hover:bg-[#E0E0E0]", tap)} aria-label={`Remove ${person.name}`} onClick={() => removeReviewer(person.id)}>
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                className="min-w-[160px] flex-1 bg-transparent px-2 py-1 text-[14px] outline-none"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && suggestions[0]) {
+                    event.preventDefault()
+                    addReviewer(suggestions[0].id)
+                  }
+                  if (event.key === "Backspace" && !query && selected.length) removeReviewer(selected[selected.length - 1].id)
+                }}
+                placeholder={selected.length ? "" : "Add a reviewer"}
+                aria-label="Add a reviewer"
+              />
+            </div>
+            {suggestions.length ? (
+              <ul className="mt-1 overflow-hidden rounded-[12px] border border-[#EBEBEB]">
+                {suggestions.map((person) => (
+                  <li key={person.id}>
+                    <button type="button" className={cn("flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#F7F7F7]", tap)} onClick={() => addReviewer(person.id)}>
+                      <Avatar user={person} size={24} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px]">{person.name}</span>
+                        <span className="block truncate text-[12px] text-[#717171]">{person.email}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
         )}
         <label className="field-label">Note to reviewers (optional)</label>
         <textarea className="field min-h-[76px]" value={note} onChange={(event) => setNote(event.target.value)} />
         <p className="mt-4 text-[13px] text-[#717171]">
-          {reviewerIds.length} reviewer{reviewerIds.length === 1 ? "" : "s"} · due {addDaysISO(todayISO(), windowDays)} if you send it now
+          {selected.length} reviewer{selected.length === 1 ? "" : "s"} · due {addDaysISO(todayISO(), windowDays)} if you send it now
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button type="button" className={cn("btn", tap)} onClick={() => router.back()}>Cancel</button>
