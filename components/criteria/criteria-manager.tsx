@@ -53,10 +53,12 @@ export function CriteriaManager() {
     return haystack.includes(query.trim().toLowerCase())
   })
 
-  function act(result: { ok: boolean; message?: string }) {
-    if (!result.message) return
-    if (result.ok) toast.success(result.message)
-    else toast.error(result.message)
+  async function act(result: Promise<{ ok: boolean; message?: string }>) {
+    const settled = await result
+    if (!settled.message) return settled
+    if (settled.ok) toast.success(settled.message)
+    else toast.error(settled.message)
+    return settled
   }
 
   function open(item?: Criterion) {
@@ -151,12 +153,13 @@ export function CriteriaManager() {
           <Button
             variant="outline"
             onClick={() => {
-              const result = saveTemplate(templateName, picked)
-              act(result)
-              if (result.ok) {
-                setTemplateName("")
-                setPicked([])
-              }
+              void (async () => {
+                const result = await act(saveTemplate(templateName, picked))
+                if (result?.ok) {
+                  setTemplateName("")
+                  setPicked([])
+                }
+              })()
             }}
           >
             Save template
@@ -199,9 +202,9 @@ export function CriteriaManager() {
                 </button>
               </label>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => { const result = saveCriterion(draft); act(result); if (result.ok) setDraft(null) }}>Save</Button>
+                <Button onClick={() => { void (async () => { const result = await act(saveCriterion(draft)); if (result?.ok) setDraft(null) })() }}>Save</Button>
                 {draft.id ? (
-                  <Button variant="ghost" className="text-[#D93B3B]" onClick={() => { const result = deleteCriterion(draft.id!); act(result); if (result.ok) setDraft(null) }}>
+                  <Button variant="ghost" className="text-[#D93B3B]" onClick={() => { void (async () => { const result = await act(deleteCriterion(draft.id!)); if (result?.ok) setDraft(null) })() }}>
                     Delete
                   </Button>
                 ) : null}

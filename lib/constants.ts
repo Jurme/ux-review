@@ -48,11 +48,15 @@ export const SEVERITIES: Severity[] = [
 ]
 
 export const REMINDER_OPTIONS: { value: string; label: string }[] = [
-  { value: "none", label: "No reminder" },
-  { value: "24", label: "24 hours before" },
-  { value: "48", label: "48 hours before" },
-  { value: "72", label: "72 hours before" },
+  { value: "10", label: "10 minutes before" },
+  { value: "20", label: "20 minutes before" },
+  { value: "30", label: "30 minutes before" },
+  { value: "60", label: "1 hour before" },
+  { value: "120", label: "2 hours before" },
+  { value: "240", label: "4 hours before" },
 ]
+
+export const DEFAULT_REMINDER_MINUTES = 20
 
 export function timezoneLabel(value: string) {
   return TIMEZONES.find((zone) => zone.value === value)?.label ?? value

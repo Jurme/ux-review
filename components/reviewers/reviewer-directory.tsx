@@ -30,10 +30,12 @@ export function ReviewerDirectory() {
     ? reviews.filter((review) => review.ownerId === person.id || review.reviewers.some((reviewer) => reviewer.userId === person.id))
     : []
 
-  function act(result: { ok: boolean; message?: string }) {
-    if (!result.message) return
-    if (result.ok) toast.success(result.message)
-    else toast.error(result.message)
+  async function act(result: Promise<{ ok: boolean; message?: string }>) {
+    const settled = await result
+    if (!settled.message) return settled
+    if (settled.ok) toast.success(settled.message)
+    else toast.error(settled.message)
+    return settled
   }
 
   return (
@@ -131,13 +133,18 @@ export function ReviewerDirectory() {
               <Input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" aria-label="Email" />
               <Button
                 onClick={() => {
-                  const result = inviteMember({ name, email })
-                  act(result)
-                  if (result.ok) {
-                    setName("")
-                    setEmail("")
-                    if (result.id) setSelected(result.id)
-                  }
+                  void (async () => {
+                    const result = await inviteMember({ name, email })
+                    if (result.message) {
+                      if (result.ok) toast.success(result.message)
+                      else toast.error(result.message)
+                    }
+                    if (result.ok) {
+                      setName("")
+                      setEmail("")
+                      if (result.id) setSelected(result.id)
+                    }
+                  })()
                 }}
               >
                 Send invite

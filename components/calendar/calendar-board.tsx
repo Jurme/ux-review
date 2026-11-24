@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { toast } from "sonner"
 import { AvatarStack, EmptyState, PageHeader, PhasePill, pageWrap } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
-import { canSeeReview, isManager, overlapsRange, phaseOf } from "@/lib/domain"
+import { canSeeReview, isManager, phaseOf } from "@/lib/domain"
 import {
   addDays,
   formatDay,
@@ -59,12 +59,12 @@ export function CalendarBoard() {
     setCursor(next)
   }
 
-  function move(id: string, date: string) {
+  async function move(id: string, date: string) {
     const review = reviews.find((item) => item.id === id)
     if (!review || !isManager(user, review)) return
-    const result = rescheduleReview(id, date)
+    const result = await rescheduleReview(id, date)
     if (!result.ok && result.message) toast.error(result.message)
-    else if (result.ok && review.startDate !== date) toast.success(`${review.title} now starts ${formatDay(date)}.`)
+    else if (result.ok && review.deadline !== date) toast.success(`${review.title} is now due ${formatDay(date)}.`)
     setDragging(null)
     setDropDate(null)
   }
@@ -81,11 +81,11 @@ export function CalendarBoard() {
       <PageHeader
         eyebrow="Calendar"
         title={label}
-        description="Each block is the period a review stays open. People contribute when they can — nothing here is a meeting."
+        description="Reviews sit on the day they are due. Drag a review to move that deadline, or click a day to send a new one."
         action={
           <Link href="/reviews/new" className={cn(buttonVariants({ size: "lg" }))}>
             <Plus />
-            Create review
+            Send a design
           </Link>
         }
       />
@@ -129,9 +129,9 @@ export function CalendarBoard() {
 
       <div className="mt-5 md:hidden">
         <Agenda
-          reviews={visible.filter((review) => overlapsRange(review, rangeStart(cursor, view), rangeEnd(cursor, view)))}
+          reviews={visible.filter((review) => review.deadline >= rangeStart(cursor, view) && review.deadline <= rangeEnd(cursor, view))}
           people={people}
-          empty="Nothing in this range. Create a review or clear a filter."
+          empty="Nothing is due in this range."
         />
       </div>
 
@@ -169,9 +169,9 @@ export function CalendarBoard() {
               </button>
             </div>
             <Agenda
-              reviews={visible.filter((review) => overlapsRange(review, toISODate(cursor), toISODate(cursor)))}
+              reviews={visible.filter((review) => review.deadline === toISODate(cursor))}
               people={people}
-              empty="No review is open on this day."
+              empty="Nothing is due on this day."
             />
           </div>
         ) : null}
@@ -288,7 +288,7 @@ function MonthGrid({
       {weeks.map((week) => {
         const start = toISODate(week[0])
         const end = toISODate(week[6])
-        const events = placeEvents(reviews.filter((review) => overlapsRange(review, start, end)), week)
+        const events = placeEvents(reviews.filter((review) => review.deadline >= start && review.deadline <= end), week)
         const lanes = Math.max(1, ...events.map((event) => event.lane + 1), 1)
         return (
           <div key={start} className="relative border-t border-[#EBEBEB]" style={{ minHeight: 52 + lanes * 28 }}>
@@ -364,11 +364,12 @@ function placeEvents(reviews: Review[], week: Date[]) {
   const start = toISODate(week[0])
   const placed = reviews
     .map((review) => {
-      const startCol = Math.max(0, dayIndex(start, review.startDate))
-      const endCol = Math.min(6, dayIndex(start, review.deadline))
-      return { review, start: startCol, end: endCol, lane: 0 }
+      const col = dayIndex(start, review.deadline)
+      if (col < 0 || col > 6) return null
+      return { review, start: col, end: col, lane: 0 }
     })
-    .sort((a, b) => a.start - b.start || b.end - a.end)
+    .filter((event): event is { review: Review; start: number; end: number; lane: number } => event !== null)
+    .sort((a, b) => a.start - b.start)
   const laneEnds: number[] = []
   for (const event of placed) {
     let lane = laneEnds.findIndex((end) => end < event.start)
@@ -416,7 +417,7 @@ function ColumnGrid({
     <div className="grid grid-cols-7 gap-2">
       {days.map((day) => {
         const iso = toISODate(day)
-        const items = reviews.filter((review) => overlapsRange(review, iso, iso))
+        const items = reviews.filter((review) => review.deadline === iso)
         return (
           <div
             key={iso}

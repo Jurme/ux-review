@@ -1,67 +1,54 @@
 "use client"
 
 import { useSyncExternalStore } from "react"
-import { createSeed } from "@/lib/seed"
-import * as mutations from "@/lib/mutations"
-import type { AppState, Mutation, Provider } from "@/lib/types"
+import type { AppState, Mutation } from "@/lib/types"
 
-const KEY = "ux-review.v1"
+type Snap =
+  | { gate: "loading" }
+  | { gate: "signed_out" }
+  | { gate: "invite"; email: string }
+  | { gate: "ready"; state: AppState; revision: number }
 
-let memory: AppState | null = null
-let bootstrapped = false
+const LOADING: Snap = { gate: "loading" }
+let snap: Snap = LOADING
+let revision = 0
+let started = false
+let queue: Promise<void> = Promise.resolve()
 const listeners = new Set<() => void>()
 
-function isState(value: unknown): value is AppState {
-  if (!value || typeof value !== "object") return false
-  const candidate = value as AppState
-  return (
-    candidate.version === 1 &&
-    Array.isArray(candidate.users) &&
-    Array.isArray(candidate.reviews) &&
-    Array.isArray(candidate.criteria) &&
-    Array.isArray(candidate.feedback)
-  )
-}
-
-function bootstrap() {
-  if (bootstrapped || typeof window === "undefined") return
-  bootstrapped = true
-  try {
-    const raw = window.localStorage.getItem(KEY)
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw)
-      if (isState(parsed)) {
-        memory = {
-          ...parsed,
-          templates: parsed.templates ?? [],
-          notifications: parsed.notifications ?? [],
-          activities: parsed.activities ?? [],
-          provider: parsed.provider ?? null,
-        }
-        return
-      }
-    }
-  } catch {
-    memory = null
-  }
-  memory = createSeed()
-  window.localStorage.setItem(KEY, JSON.stringify(memory))
-}
-
-function commit(next: AppState) {
-  memory = next
-  if (typeof window !== "undefined") window.localStorage.setItem(KEY, JSON.stringify(next))
+function publish(next: Snap) {
+  snap = next
+  if (next.gate === "ready") revision = next.revision
   listeners.forEach((listener) => listener())
 }
 
-function apply(result: Mutation) {
-  if (result.ok && result.state !== memory) commit(result.state)
-  return result
+export async function refreshWorkspace() {
+  const response = await fetch("/api/workspace", { cache: "no-store" })
+  if (response.status === 401) {
+    publish({ gate: "signed_out" })
+    return
+  }
+  const body = (await response.json().catch(() => null)) as { state?: AppState; revision?: number; email?: string } | null
+  if (response.status === 403) {
+    publish({ gate: "invite", email: body?.email ?? "" })
+    return
+  }
+  if (!response.ok || !body?.state || typeof body.revision !== "number") {
+    publish({ gate: "signed_out" })
+    return
+  }
+  publish({ gate: "ready", state: body.state, revision: body.revision })
 }
 
-function read(): AppState | null {
+function bootstrap() {
+  if (started || typeof window === "undefined") return
+  started = true
+  void refreshWorkspace()
+}
+
+function read(): Snap {
   bootstrap()
-  return memory
+  return snap
 }
 
 function subscribe(listener: () => void) {
@@ -70,10 +57,13 @@ function subscribe(listener: () => void) {
 }
 
 export function useWorkspace() {
-  const state = useSyncExternalStore(subscribe, read, () => null)
+  const current = useSyncExternalStore(subscribe, read, () => LOADING)
+  const state = current.gate === "ready" ? current.state : null
   const user = state?.users.find((item) => item.id === state.currentUserId) ?? null
   return {
-    ready: state !== null,
+    ready: current.gate !== "loading",
+    gate: current.gate,
+    inviteEmail: current.gate === "invite" ? current.email : "",
     state,
     user,
     workspace: state?.workspace ?? null,
@@ -89,127 +79,168 @@ export function useWorkspace() {
   }
 }
 
-function run(mutate: (state: AppState) => Mutation): Mutation {
-  if (!memory) return { state: createSeed(), ok: false, message: "The workspace is still opening." }
-  return apply(mutate(memory))
+async function send(action: string, args: unknown[], retry: boolean): Promise<Mutation> {
+  const response = await fetch("/api/mutate", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action, args, revision }),
+  })
+  if (response.status === 401) {
+    publish({ gate: "signed_out" })
+    return { state: fallbackState(), ok: false, message: "Sign in again." }
+  }
+  if (response.status === 409 && retry) {
+    await refreshWorkspace()
+    return send(action, args, false)
+  }
+  const body = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; id?: string; state?: AppState; revision?: number; email?: string } | null
+  if (response.status === 403) {
+    publish({ gate: "invite", email: body?.email ?? "" })
+    return { state: fallbackState(), ok: false, message: "This workspace has not invited you." }
+  }
+  if (body?.state && typeof body.revision === "number") {
+    publish({ gate: "ready", state: body.state, revision: body.revision })
+  }
+  return {
+    state: body?.state ?? fallbackState(),
+    ok: Boolean(body?.ok),
+    message: body?.message,
+    id: body?.id,
+  }
 }
 
-export function signIn(userId: string, provider: Provider) {
-  return run((state) => mutations.signIn(state, userId, provider))
+function fallbackState(): AppState {
+  if (snap.gate === "ready") return snap.state
+  return {
+    version: 1,
+    currentUserId: null,
+    provider: null,
+    workspace: { name: "UX Review", timezone: "Asia/Thimphu", reminderHours: 20, projects: [], theme: "light" },
+    users: [],
+    criteria: [],
+    templates: [],
+    reviews: [],
+    feedback: [],
+    notifications: [],
+    activities: [],
+  }
 }
 
-export function signOut() {
-  return run((state) => mutations.signOut(state))
+function run(action: string, args: unknown[]): Promise<Mutation> {
+  if (snap.gate !== "ready") return Promise.resolve({ state: fallbackState(), ok: false, message: "The workspace is still opening." })
+  const job = queue.then(() => send(action, args, true))
+  queue = job.then(() => undefined, () => undefined)
+  return job
 }
 
-export function saveReview(...args: Parameters<typeof mutations.saveReview> extends [AppState, ...infer Rest] ? Rest : never) {
-  return run((state) => mutations.saveReview(state, ...args))
+export function saveReview(...args: unknown[]) {
+  return run("saveReview", args)
 }
 
 export function publishReview(id: string) {
-  return run((state) => mutations.publishReview(state, id))
+  return run("publishReview", [id])
 }
 
 export function deleteDraft(id: string) {
-  return run((state) => mutations.deleteDraft(state, id))
+  return run("deleteDraft", [id])
 }
 
 export function rescheduleReview(id: string, startDate: string) {
-  return run((state) => mutations.rescheduleReview(state, id, startDate))
+  return run("rescheduleReview", [id, startDate])
 }
 
-export function setLifecycle(...args: Parameters<typeof mutations.setLifecycle> extends [AppState, ...infer Rest] ? Rest : never) {
-  return run((state) => mutations.setLifecycle(state, ...args))
+export function setLifecycle(...args: unknown[]) {
+  return run("setLifecycle", args)
 }
 
 export function remindReviewer(reviewId: string, userId: string) {
-  return run((state) => mutations.remindReviewer(state, reviewId, userId))
+  return run("remindReviewer", [reviewId, userId])
 }
 
-export function setReviewerStatus(...args: Parameters<typeof mutations.setReviewerStatus> extends [AppState, ...infer Rest] ? Rest : never) {
-  return run((state) => mutations.setReviewerStatus(state, ...args))
+export function setReviewerStatus(...args: unknown[]) {
+  return run("setReviewerStatus", args)
 }
 
-export function saveFeedback(...args: Parameters<typeof mutations.saveFeedback> extends [AppState, ...infer Rest] ? Rest : never) {
-  return run((state) => mutations.saveFeedback(state, ...args))
+export function saveFeedback(...args: unknown[]) {
+  return run("saveFeedback", args)
 }
 
 export function deleteFeedback(id: string) {
-  return run((state) => mutations.deleteFeedback(state, id))
+  return run("deleteFeedback", [id])
 }
 
-export function setFeedbackStatus(...args: Parameters<typeof mutations.setFeedbackStatus> extends [AppState, ...infer Rest] ? Rest : never) {
-  return run((state) => mutations.setFeedbackStatus(state, ...args))
+export function setFeedbackStatus(...args: unknown[]) {
+  return run("setFeedbackStatus", args)
 }
 
 export function respondToFeedback(id: string, response: string) {
-  return run((state) => mutations.respondToFeedback(state, id, response))
+  return run("respondToFeedback", [id, response])
 }
 
-export function saveCriterion(...args: Parameters<typeof mutations.saveCriterion> extends [AppState, ...infer Rest] ? Rest : never) {
-  return run((state) => mutations.saveCriterion(state, ...args))
+export function saveCriterion(...args: unknown[]) {
+  return run("saveCriterion", args)
 }
 
 export function duplicateCriterion(id: string) {
-  return run((state) => mutations.duplicateCriterion(state, id))
+  return run("duplicateCriterion", [id])
 }
 
 export function deleteCriterion(id: string) {
-  return run((state) => mutations.deleteCriterion(state, id))
+  return run("deleteCriterion", [id])
 }
 
 export function reorderCriterion(id: string, direction: -1 | 1) {
-  return run((state) => mutations.reorderCriterion(state, id, direction))
+  return run("reorderCriterion", [id, direction])
 }
 
 export function saveTemplate(name: string, criteriaIds: string[]) {
-  return run((state) => mutations.saveTemplate(state, name, criteriaIds))
+  return run("saveTemplate", [name, criteriaIds])
 }
 
 export function deleteTemplate(id: string) {
-  return run((state) => mutations.deleteTemplate(state, id))
+  return run("deleteTemplate", [id])
 }
 
 export function inviteMember(input: { name: string; email: string }) {
-  return run((state) => mutations.inviteMember(state, input))
+  return run("inviteMember", [input])
 }
 
-export function updateMember(...args: Parameters<typeof mutations.updateMember> extends [AppState, ...infer Rest] ? Rest : never) {
-  return run((state) => mutations.updateMember(state, ...args))
+export function updateMember(...args: unknown[]) {
+  return run("updateMember", args)
 }
 
 export function removeMember(id: string) {
-  return run((state) => mutations.removeMember(state, id))
+  return run("removeMember", [id])
 }
 
 export function updateProfile(patch: { name: string; title: string }) {
-  return run((state) => mutations.updateProfile(state, patch))
+  return run("updateProfile", [patch])
 }
 
 export function updateWorkspace(patch: { name: string; timezone: string; reminderHours: number | null }) {
-  return run((state) => mutations.updateWorkspace(state, patch))
+  return run("updateWorkspace", [patch])
+}
+
+export function addProject(name: string) {
+  return run("addProject", [name])
+}
+
+export function removeProject(name: string) {
+  return run("removeProject", [name])
+}
+
+export function setTheme(theme: "light" | "dark") {
+  return run("setTheme", [theme])
 }
 
 export function markRead(id: string) {
-  return run((state) => mutations.markRead(state, id))
+  return run("markRead", [id])
 }
 
 export function markAllRead() {
-  return run((state) => mutations.markAllRead(state))
+  return run("markAllRead", [])
 }
 
 export function resetDemo() {
-  return run((state) => {
-    const fresh = createSeed()
-    const stillThere = fresh.users.some((user) => user.id === state.currentUserId)
-    return {
-      state: {
-        ...fresh,
-        currentUserId: stillThere ? state.currentUserId : "user_tashi",
-        provider: state.provider,
-      },
-      ok: true,
-      message: "Sample workspace restored.",
-    }
-  })
+  return run("resetDemo", [])
 }

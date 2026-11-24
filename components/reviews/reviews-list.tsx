@@ -49,7 +49,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
           archive ? undefined : (
             <Link href="/reviews/new" className={cn(buttonVariants({ size: "lg" }))}>
               <Plus />
-              Create review
+              Send a design
             </Link>
           )
         }

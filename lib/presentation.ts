@@ -9,44 +9,44 @@ export const PHASE_META: Record<
 > = {
   draft: {
     label: "Draft",
-    description: "Saved, not published",
+    description: "Saved, not sent",
     chip: "bg-[#F7F7F7] text-[#717171]",
-    dot: "bg-[#717171]",
+    dot: "bg-[#999]",
     tint: "bg-[#F7F7F7] text-[#717171]",
   },
   scheduled: {
     label: "Scheduled",
-    description: "Opens on the start date",
-    chip: "bg-[#F7F7F7] text-[#222]",
-    dot: "bg-[#222]",
-    tint: "bg-[#F7F7F7] text-[#222]",
+    description: "Waiting for the send date",
+    chip: "bg-[#E8F0FE] text-[#2B5CC7]",
+    dot: "bg-[#2B5CC7]",
+    tint: "bg-[#E8F0FE] text-[#2B5CC7]",
   },
   in_progress: {
     label: "In progress",
-    description: "The review window is open",
-    chip: "bg-[#FFF1F3] text-[#C41E45]",
-    dot: "bg-[#FF385C]",
-    tint: "bg-[#FFF1F3] text-[#C41E45]",
+    description: "Reviewers are working through it",
+    chip: "bg-[#FFF1D6] text-[#B7791F]",
+    dot: "bg-[#B7791F]",
+    tint: "bg-[#FFF1D6] text-[#B7791F]",
   },
   feedback_pending: {
     label: "Feedback pending",
     description: "Deadline passed with notes still outstanding",
-    chip: "bg-[#FBF6EE] text-[#8A5A12]",
-    dot: "bg-[#B7791F]",
-    tint: "bg-[#FBF6EE] text-[#8A5A12]",
+    chip: "bg-[#FFE3E8] text-[#FF385C]",
+    dot: "bg-[#FF385C]",
+    tint: "bg-[#FFE3E8] text-[#FF385C]",
   },
   completed: {
     label: "Completed",
-    description: "The owner closed the review",
-    chip: "bg-[#F1F8F5] text-[#046B48]",
+    description: "Every assigned reviewer is done, or the owner closed it",
+    chip: "bg-[#DCF5EA] text-[#008A5B]",
     dot: "bg-[#008A5B]",
-    tint: "bg-[#F1F8F5] text-[#046B48]",
+    tint: "bg-[#DCF5EA] text-[#008A5B]",
   },
   archived: {
     label: "Archived",
     description: "Kept for the record",
     chip: "bg-[#F7F7F7] text-[#717171]",
-    dot: "bg-[#B0B0B0]",
+    dot: "bg-[#BBBBBB]",
     tint: "bg-[#F7F7F7] text-[#717171]",
   },
 }
@@ -61,10 +61,10 @@ export const PHASE_ORDER: Phase[] = [
 ]
 
 export const SEVERITY_META: Record<Severity, { label: string; chip: string }> = {
-  critical: { label: "Critical", chip: "bg-[#FDECEC] text-[#B42318]" },
-  major: { label: "Major", chip: "bg-[#FBF6EE] text-[#8A5A12]" },
-  minor: { label: "Minor", chip: "bg-[#F7F7F7] text-[#222]" },
-  suggestion: { label: "Suggestion", chip: "bg-[#F7F7F7] text-[#717171]" },
+  critical: { label: "Critical", chip: "bg-[#FDECEC] text-[#D93B3B]" },
+  major: { label: "Major", chip: "bg-[#FFF1D6] text-[#B7791F]" },
+  minor: { label: "Minor", chip: "bg-[#F7F7F7] text-[#717171]" },
+  suggestion: { label: "Suggestion", chip: "bg-[#DCF5EA] text-[#008A5B]" },
 }
 
 export const REVIEWER_META: Record<ReviewerStatus, { label: string; chip: string }> = {
@@ -73,16 +73,7 @@ export const REVIEWER_META: Record<ReviewerStatus, { label: string; chip: string
   completed: { label: "Completed", chip: "bg-[#F1F8F5] text-[#046B48]" },
 }
 
-export const AVATAR_COLORS = [
-  "#222222",
-  "#6B4F3A",
-  "#8A4B45",
-  "#3F6B5A",
-  "#6E4B62",
-  "#3E5166",
-  "#8C6A2F",
-  "#4F4F4F",
-]
+export const AVATAR_COLORS = ["#FF385C", "#7C5CFF", "#008A5B", "#E08A00", "#2B7FFF", "#C2410C"]
 
 export function avatarColor(name: string) {
   let hash = 0

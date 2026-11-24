@@ -5,7 +5,8 @@ import {
   validateFeedback,
   validateReview,
 } from "@/lib/domain"
-import { clip, diffDays, formatDay, isEmail, normalizeHttpUrl, uid } from "@/lib/format"
+import { createSeed } from "@/lib/seed"
+import { clip, formatDay, isEmail, normalizeHttpUrl, todayISO, uid } from "@/lib/format"
 import type {
   Activity,
   AppState,
@@ -142,7 +143,6 @@ export function saveReview(
   if (errors.length) return same(state, errors[0])
   const reviewers = reviewersFrom(state, draft, existing)
   if (typeof reviewers === "string") return same(state, reviewers)
-  if (mode === "publish" && reviewers.length === 0) return same(state, "Add at least one reviewer.")
   const ownerId = user.role === "admin" ? draft.ownerId || user.id : (existing?.ownerId ?? user.id)
   if (!state.users.some((item) => item.id === ownerId)) return same(state, "Choose an owner who is in the workspace.")
   const now = stamp()
@@ -164,7 +164,7 @@ export function saveReview(
     timezone: draft.timezone || state.workspace.timezone,
     reminderHours: draft.reminderHours,
     lifecycle: publishing ? "open" : (existing?.lifecycle ?? "draft"),
-    shareFeedback: draft.shareFeedback,
+    shareFeedback: true,
     criteriaIds: [...new Set(draft.criteriaIds)],
     reviewers,
     createdAt: existing?.createdAt ?? now,
@@ -224,7 +224,13 @@ export function saveReview(
       next = withActivity(next, { type: "updated", message: `${user.name} updated ${review.title}.`, reviewId: review.id })
     }
   }
-  const message = publishing ? "Review published. Invitations are in each reviewer’s notifications." : existing ? "Changes saved." : "Draft saved."
+  const message = publishing
+    ? reviewers.length
+      ? "Sent. Reviewers have been invited."
+      : "Sent. Share the review link so anyone on the team can respond."
+    : existing
+      ? "Changes saved."
+      : "Draft saved."
   return done(next, message, review.id)
 }
 
@@ -259,22 +265,12 @@ export function rescheduleReview(state: AppState, id: string, startDate: string)
   if (review.lifecycle === "completed" || review.lifecycle === "archived") {
     return same(state, "Reopen the review before moving it.")
   }
-  if (review.startDate === startDate) return done(state)
-  const span = Math.max(0, diffDays(review.startDate, review.deadline))
-  const deadline = new Date(startDate)
-  if (Number.isNaN(deadline.getTime())) return same(state, "Choose a valid date.")
-  const draft = reviewToDraft({ ...review, startDate, deadline: addDeadline(startDate, span) })
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return same(state, "Choose a valid date.")
+  const deadline = startDate
+  const nextStart = review.startDate > deadline ? deadline : review.startDate
+  if (review.deadline === deadline && review.startDate === nextStart) return done(state)
+  const draft = reviewToDraft({ ...review, startDate: nextStart, deadline })
   return saveReview(state, draft, review.lifecycle === "draft" ? "draft" : "publish", review.id)
-}
-
-function addDeadline(startDate: string, span: number) {
-  const [year, month, day] = startDate.split("-").map(Number)
-  const date = new Date(year, (month || 1) - 1, day || 1)
-  date.setDate(date.getDate() + span)
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, "0")
-  const d = String(date.getDate()).padStart(2, "0")
-  return `${y}-${m}-${d}`
 }
 
 export function setLifecycle(
@@ -374,7 +370,24 @@ export function setReviewerStatus(
       reviewId: review.id,
     })
   }
-  return done(next, status === "completed" ? "Marked complete." : "Review marked in progress.")
+  const updated = next.reviews.find((item) => item.id === review.id)
+  if (
+    status === "completed" &&
+    updated &&
+    updated.lifecycle === "open" &&
+    updated.reviewers.length > 0 &&
+    updated.reviewers.every((reviewer) => reviewer.status === "completed")
+  ) {
+    const closedAt = stamp()
+    next = replaceReview(next, { ...updated, lifecycle: "completed", completedAt: closedAt, updatedAt: closedAt })
+    next = withActivity(next, {
+      type: "completed",
+      message: `${updated.title} is complete. Every assigned reviewer is done.`,
+      reviewId: updated.id,
+    })
+    return done(next, "All reviewers done. Review completed.")
+  }
+  return done(next, status === "completed" ? "Marked as completed." : "Review marked in progress.")
 }
 
 export function saveFeedback(state: AppState, draft: FeedbackDraft, mode: "draft" | "submit"): Mutation {
@@ -383,8 +396,12 @@ export function saveFeedback(state: AppState, draft: FeedbackDraft, mode: "draft
   const review = state.reviews.find((item) => item.id === draft.reviewId)
   if (!review) return same(state, "That review is no longer here.")
   if (review.lifecycle !== "open") return same(state, "This review is closed.")
-  if (!assignmentFor(review, user.id)) return same(state, "Only assigned reviewers can leave feedback.")
-  if (!review.criteriaIds.includes(draft.criterionId)) return same(state, "Choose a criterion from this review.")
+  if (user.accountStatus !== "active" && user.accountStatus !== "invited") return same(state, "Sign in to leave feedback.")
+  const activeCriteria = state.criteria.filter((item) => item.active)
+  if (!activeCriteria.length) return same(state, "Add a criterion in Settings before leaving feedback.")
+  if (!activeCriteria.some((item) => item.id === draft.criterionId)) {
+    return same(state, "Choose a criterion.")
+  }
   const errors = validateFeedback(draft, mode)
   if (errors.length) return same(state, errors[0])
   const existing = draft.id ? state.feedback.find((item) => item.id === draft.id) : undefined
@@ -411,15 +428,20 @@ export function saveFeedback(state: AppState, draft: FeedbackDraft, mode: "draft
   const feedback = existing
     ? state.feedback.map((item) => (item.id === record.id ? record : item))
     : [record, ...state.feedback]
-  const reviewers = review.reviewers.map((reviewer) => {
-    if (reviewer.userId !== user.id) return reviewer
-    if (reviewer.status === "pending" || (reviewer.status === "completed" && (!existing || mode === "draft"))) {
-      return { ...reviewer, status: "in_progress" as const }
-    }
-    return reviewer
-  })
+  const known = review.reviewers.some((reviewer) => reviewer.userId === user.id)
+  const reviewers = known
+    ? review.reviewers.map((reviewer) => {
+        if (reviewer.userId !== user.id) return reviewer
+        if (reviewer.status === "pending" || (reviewer.status === "completed" && (!existing || mode === "draft"))) {
+          return { ...reviewer, status: "in_progress" as const }
+        }
+        return reviewer
+      })
+    : [...review.reviewers, { userId: user.id, focus: "General", status: "in_progress" as const }]
+  const today = todayISO()
+  const startDate = review.startDate > today ? today : review.startDate
   let next: AppState = {
-    ...replaceReview({ ...state, feedback }, { ...review, reviewers, updatedAt: now }),
+    ...replaceReview({ ...state, feedback }, { ...review, reviewers, startDate, updatedAt: now }),
   }
   if (mode === "submit" && (!existing || existing.status === "draft")) {
     next = withNotes(next, [review.ownerId], {
@@ -654,7 +676,35 @@ export function updateWorkspace(
   if (!user || user.role !== "admin") return same(state, "Only an admin can change workspace settings.")
   const name = clip(patch.name, 60)
   if (!name) return same(state, "The workspace needs a name.")
-  return done({ ...state, workspace: { name, timezone: patch.timezone, reminderHours: patch.reminderHours } }, "Workspace saved.")
+  return done({
+    ...state,
+    workspace: { ...state.workspace, name, timezone: patch.timezone, reminderHours: patch.reminderHours },
+  }, "Workspace saved.")
+}
+
+export function addProject(state: AppState, name: string): Mutation {
+  const user = actor(state)
+  if (!user) return same(state, "Sign in to add a project.")
+  const project = clip(name, 80)
+  if (!project) return same(state, "Enter a project name.")
+  if (state.workspace.projects.some((item) => item.toLowerCase() === project.toLowerCase())) {
+    return same(state, "That project already exists.")
+  }
+  return done({ ...state, workspace: { ...state.workspace, projects: [...state.workspace.projects, project] } }, "Project added.")
+}
+
+export function removeProject(state: AppState, name: string): Mutation {
+  const user = actor(state)
+  if (!user || user.role !== "admin") return same(state, "Only an admin can remove a project.")
+  return done({
+    ...state,
+    workspace: { ...state.workspace, projects: state.workspace.projects.filter((item) => item !== name) },
+  }, "Project removed.")
+}
+
+export function setTheme(state: AppState, theme: "light" | "dark"): Mutation {
+  if (!actor(state)) return same(state, "Sign in to change the appearance.")
+  return done({ ...state, workspace: { ...state.workspace, theme } })
 }
 
 export function markRead(state: AppState, id: string): Mutation {
@@ -664,6 +714,37 @@ export function markRead(state: AppState, id: string): Mutation {
       item.id === id && item.userId === state.currentUserId ? { ...item, read: true } : item,
     ),
   })
+}
+
+export function loadSample(state: AppState): Mutation {
+  const me = actor(state)
+  if (!me) return same(state, "Sign in first.")
+  const fresh = createSeed()
+  const swap = (id: string) => (id === "user_tashi" ? me.id : id)
+  const users = [
+    { ...me, role: "admin" as const },
+    ...fresh.users.filter((user) => user.id !== "user_tashi" && user.email.toLowerCase() !== me.email.toLowerCase()),
+  ]
+  return done(
+    {
+      ...fresh,
+      currentUserId: me.id,
+      provider: state.provider,
+      workspace: { ...fresh.workspace, theme: state.workspace.theme, name: state.workspace.name || fresh.workspace.name },
+      users,
+      reviews: fresh.reviews.map((review) => ({
+        ...review,
+        ownerId: swap(review.ownerId),
+        reviewers: review.reviewers.map((reviewer) => ({ ...reviewer, userId: swap(reviewer.userId) })),
+      })),
+      feedback: fresh.feedback.map((item) => ({ ...item, authorId: swap(item.authorId) })),
+      notifications: fresh.notifications
+        .map((item) => ({ ...item, userId: swap(item.userId) }))
+        .filter((item) => users.some((user) => user.id === item.userId)),
+      activities: fresh.activities.map((item) => ({ ...item, actorId: swap(item.actorId) })),
+    },
+    "Sample workspace loaded. You stay signed in as yourself.",
+  )
 }
 
 export function markAllRead(state: AppState): Mutation {

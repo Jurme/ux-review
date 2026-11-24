@@ -51,8 +51,7 @@ export function visibleFeedback(review: Review, user: User | null, feedback: Fee
   return feedback.filter((item) => {
     if (item.reviewId !== review.id || !user) return false
     if (item.status === "draft") return item.authorId === user.id
-    if (isManager(user, review) || item.authorId === user.id) return true
-    return review.shareFeedback
+    return true
   })
 }
 
@@ -68,9 +67,8 @@ export function submittedCount(feedback: Feedback[], reviewId: string, userId?: 
 export function reminderDue(review: Review, today = todayISO()) {
   if (review.lifecycle !== "open" || !review.reminderHours) return false
   const days = diffDays(today, review.deadline)
-  const windowDays = Math.max(0, Math.ceil(review.reminderHours / 24))
   const pending = review.reviewers.some((reviewer) => reviewer.status !== "completed")
-  return pending && days >= 0 && days <= windowDays
+  return pending && days === 0
 }
 
 export function overlapsRange(review: Review, start: string, end: string) {
@@ -93,11 +91,9 @@ export function validateReview(draft: ReviewDraft, mode: "draft" | "publish") {
     errors.push("The end time has to be later than the start time.")
   }
   if (mode === "draft") return errors
-  if (!draft.project.trim()) errors.push("Add a project name.")
-  if (!normalizeHttpUrl(draft.figmaUrl)) errors.push("Add a Figma link, including https://.")
-  if (!draft.startDate || !draft.deadline) errors.push("Set a start date and a deadline.")
-  if (draft.reviewers.length === 0) errors.push("Add at least one reviewer.")
-  if (draft.criteriaIds.length === 0) errors.push("Choose at least one criterion.")
+  if (!draft.project.trim()) errors.push("Choose a project.")
+  if (!normalizeHttpUrl(draft.figmaUrl)) errors.push("Add a valid Figma URL starting with https://.")
+  if (!draft.startDate || !draft.deadline) errors.push("Pick the day this review is sent.")
   if (draft.referenceUrls.some((url) => url.trim() && !normalizeHttpUrl(url))) {
     errors.push("Reference links need to be valid web addresses.")
   }
@@ -105,10 +101,10 @@ export function validateReview(draft: ReviewDraft, mode: "draft" | "publish") {
 }
 
 export function validateFeedback(draft: FeedbackDraft, mode: "draft" | "submit") {
+  void mode
   const errors: string[] = []
   if (!draft.criterionId) errors.push("Choose a criterion.")
   if (!draft.observation.trim()) errors.push("Write what you noticed.")
-  if (mode === "submit" && !draft.feedback.trim()) errors.push("Explain why it matters.")
   if (draft.figmaLink.trim() && !normalizeHttpUrl(draft.figmaLink)) {
     errors.push("The Figma comment link needs to be a valid URL.")
   }

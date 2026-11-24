@@ -6,13 +6,14 @@ import { Boot } from "@/components/common"
 import { useWorkspace } from "@/lib/store"
 
 export default function HomePage() {
-  const { ready, user } = useWorkspace()
+  const { ready, user, gate } = useWorkspace()
   const router = useRouter()
 
   useEffect(() => {
     if (!ready) return
-    router.replace(user ? "/dashboard" : "/login")
-  }, [ready, user, router])
+    if (gate === "invite") router.replace("/login")
+    else router.replace(user ? "/dashboard" : "/login")
+  }, [ready, user, gate, router])
 
   return <Boot />
 }

@@ -1,467 +1,293 @@
 "use client"
 
-import Link from "next/link"
+import { useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useState } from "react"
-import { Check, Plus, X } from "lucide-react"
+import { X } from "lucide-react"
 import { toast } from "sonner"
-import { Avatar, Field, NativeSelect, pageWrap } from "@/components/common"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { FOCUS, PROJECTS, REMINDER_OPTIONS, TIMEZONES, timezoneLabel } from "@/lib/constants"
-import { isManager, reviewToDraft, validateReview } from "@/lib/domain"
-import { addDaysISO, formatDay, isISODate, todayISO, windowLabel } from "@/lib/format"
+import { Avatar } from "@/components/common"
+import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/constants"
+import { addDaysISO, isEmail, parseISODate, todayISO, toISODate } from "@/lib/format"
 import { tap } from "@/lib/presentation"
-import { deleteDraft, inviteMember, saveReview, useWorkspace } from "@/lib/store"
+import { addProject, inviteMember, saveReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import type { ReviewDraft } from "@/lib/types"
 
-export function CreateReview({ reviewId }: { reviewId?: string }) {
+const WINDOWS = [
+  { days: 2, label: "2 days" },
+  { days: 3, label: "3 days" },
+  { days: 5, label: "5 days" },
+  { days: 7, label: "1 week" },
+]
+
+export function CreateReview() {
   const params = useSearchParams()
-  const { ready, user, criteria, templates, reviews, workspace } = useWorkspace()
-  const key = reviewId ?? `new:${params.get("date") ?? ""}`
-
-  if (!ready || !user || !workspace) {
-    return <div className={pageWrap()}><p className="text-[#717171]">Opening the form…</p></div>
-  }
-
-  const existingForKey = reviewId ? reviews.find((review) => review.id === reviewId) : undefined
-  const date = isISODate(params.get("date")) ? params.get("date")! : todayISO()
-  const standard = templates.find((template) => template.id === "tpl_standard")?.criteriaIds
-  const active = criteria.filter((item) => item.active).sort((a, b) => a.order - b.order).map((item) => item.id)
-  const initial: ReviewDraft = existingForKey
-    ? reviewToDraft(existingForKey)
-    : {
-        title: "",
-        project: "",
-        feature: "",
-        description: "",
-        ownerId: user.id,
-        figmaUrl: "",
-        designVersion: "",
-        referenceUrls: [],
-        startDate: date,
-        deadline: addDaysISO(date, 4),
-        startTime: "",
-        endTime: "",
-        timezone: workspace.timezone,
-        reminderHours: workspace.reminderHours,
-        shareFeedback: true,
-        criteriaIds: standard ?? active.slice(0, 8),
-        reviewers: [],
-      }
-
-  return (
-    <CreateReviewForm
-      key={key}
-      initial={initial}
-      reviewId={reviewId}
-    />
-  )
+  const initial = params.get("date")
+  const sendDefault = initial && /^\d{4}-\d{2}-\d{2}$/.test(initial) ? initial : todayISO()
+  return <SendForm key={sendDefault} sendDefault={sendDefault} />
 }
 
-function CreateReviewForm({ initial, reviewId }: { initial: ReviewDraft; reviewId?: string }) {
+function SendForm({ sendDefault }: { sendDefault: string }) {
   const router = useRouter()
-  const { user, users, criteria, templates, reviews } = useWorkspace()
-  const [draft, setDraft] = useState(initial)
-  const [attempt, setAttempt] = useState<"draft" | "publish" | null>(null)
+  const { user, users, reviews, workspace } = useWorkspace()
+  const [title, setTitle] = useState("")
+  const [project, setProject] = useState("")
+  const [figma, setFigma] = useState("")
+  const [note, setNote] = useState("")
+  const [sendOn, setSendOn] = useState(sendDefault)
+  const [windowDays, setWindowDays] = useState(3)
+  const [month, setMonth] = useState(() => {
+    const date = parseISODate(sendDefault)
+    return new Date(date.getFullYear(), date.getMonth(), 1)
+  })
+  const [reviewerIds, setReviewerIds] = useState<string[]>(() => users.filter((person) => person.id !== user?.id).map((person) => person.id))
   const [query, setQuery] = useState("")
-  const [invite, setInvite] = useState({ name: "", email: "", focus: "" })
-  const [link, setLink] = useState("")
+  const [newProject, setNewProject] = useState("")
+  const [reminder, setReminder] = useState(() => {
+    const current = String(workspace?.reminderHours ?? "")
+    return REMINDER_OPTIONS.some((item) => item.value === current) ? Number(current) : DEFAULT_REMINDER_MINUTES
+  })
 
-  if (!user) return null
+  const projects = useMemo(() => {
+    const fromReviews = reviews.map((review) => review.project)
+    return [...new Set([...(workspace?.projects ?? []), ...fromReviews])].filter(Boolean).sort()
+  }, [reviews, workspace?.projects])
 
-  const existing = reviewId ? reviews.find((review) => review.id === reviewId) : undefined
-  if (reviewId && !existing) {
-    return (
-      <div className={pageWrap()}>
-        <h1 className="text-[28px] font-semibold tracking-tight">Review not found</h1>
-        <p className="mt-2 text-[#717171]">It may have been deleted from this browser.</p>
-        <Link href="/reviews" className="mt-4 inline-block text-[14px] font-medium underline">Back to reviews</Link>
-      </div>
-    )
-  }
-  if (existing && !isManager(user, existing)) {
-    return (
-      <div className={pageWrap()}>
-        <h1 className="text-[28px] font-semibold tracking-tight">You can’t edit this review</h1>
-        <p className="mt-2 text-[#717171]">Only the owner or an admin can change it.</p>
-      </div>
-    )
-  }
-  if (existing && (existing.lifecycle === "completed" || existing.lifecycle === "archived")) {
-    return (
-      <div className={pageWrap()}>
-        <h1 className="text-[28px] font-semibold tracking-tight">This review is closed</h1>
-        <p className="mt-2 max-w-lg text-[#717171]">Reopen it from the review page if you need to change the brief, the dates, or the reviewers.</p>
-        <Link href={`/reviews/${existing.id}`} className="mt-4 inline-block font-medium underline">Go to the review</Link>
-      </div>
-    )
+  if (!user || !workspace) return null
+  const others = users.filter((person) => person.id !== user.id)
+  const selected = reviewerIds.map((id) => users.find((person) => person.id === id)).filter((person): person is NonNullable<typeof person> => Boolean(person))
+  const suggestions = query.trim()
+    ? others.filter((person) => !reviewerIds.includes(person.id) && `${person.name} ${person.email}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 6)
+    : []
+
+  function removeReviewer(id: string) {
+    setReviewerIds((current) => current.filter((item) => item !== id))
   }
 
-  const errors = attempt ? validateReview(draft, attempt) : []
-  const selected = new Set(draft.reviewers.map((reviewer) => reviewer.userId))
-  const matches = users.filter((person) => {
-    if (selected.has(person.id)) return false
-    const q = query.trim().toLowerCase()
-    if (!q) return true
-    return person.name.toLowerCase().includes(q) || person.email.toLowerCase().includes(q)
-  }).slice(0, 6)
-  const orderedCriteria = [...criteria].sort((a, b) => a.order - b.order)
-  const chosenCriteria = orderedCriteria.filter((item) => draft.criteriaIds.includes(item.id))
-
-  function update(patch: Partial<ReviewDraft>) {
-    setDraft((current) => (current ? { ...current, ...patch } : current))
+  function addReviewer(id: string) {
+    setReviewerIds((current) => (current.includes(id) ? current : [...current, id]))
+    setQuery("")
   }
 
-  function save(mode: "draft" | "publish") {
-    if (!draft) return
-    setAttempt(mode)
-    if (validateReview(draft, mode).length) return
-    const result = saveReview(draft, mode, reviewId)
+  async function addProjectName() {
+    const result = await addProject(newProject)
+    if (!result.ok) {
+      toast.error(result.message)
+      return
+    }
+    setProject(newProject.trim())
+    setNewProject("")
+    toast.success(result.message ?? "Project added.")
+  }
+
+  async function addFromQuery() {
+    const text = query.trim()
+    if (!text) return
+    const existing = others.find((person) => person.email.toLowerCase() === text.toLowerCase() || person.name.toLowerCase() === text.toLowerCase())
+    if (existing) {
+      addReviewer(existing.id)
+      return
+    }
+    if (!isEmail(text)) {
+      if (suggestions.length === 1) addReviewer(suggestions[0].id)
+      return
+    }
+    const result = await inviteMember({ name: "", email: text })
+    if (!result.ok) {
+      toast.error(result.message)
+      return
+    }
+    if (result.id) addReviewer(result.id)
+    toast.success(result.message ?? "Reviewer added.")
+  }
+
+  async function submit(mode: "draft" | "publish") {
+    const draft: ReviewDraft = {
+      title,
+      project,
+      feature: "",
+      description: note,
+      ownerId: user!.id,
+      figmaUrl: figma,
+      designVersion: "",
+      referenceUrls: [],
+      startDate: sendOn,
+      deadline: addDaysISO(sendOn, windowDays),
+      startTime: "",
+      endTime: "",
+      timezone: workspace!.timezone,
+      reminderHours: reminder,
+      shareFeedback: true,
+      criteriaIds: [],
+      reviewers: reviewerIds.map((userId) => ({ userId, focus: "General" })),
+    }
+    const result = await saveReview(draft, mode)
     if (!result.ok) {
       toast.error(result.message)
       return
     }
     toast.success(result.message)
-    if (!reviewId) setDraft(initial)
-    router.push(result.id ? `/reviews/${result.id}` : "/reviews")
+    if (result.id) router.push(`/reviews/${result.id}`)
+    else router.push("/reviews")
   }
 
   return (
-    <div className={pageWrap()}>
-      <p className="text-[13px] text-[#717171]">{existing ? "Edit review" : "New review"}</p>
-      <h1 className="mt-1 text-[30px] font-semibold tracking-tight">{existing ? existing.title : "Create a review"}</h1>
-      <p className="mt-2 max-w-2xl text-[15px] leading-6 text-[#717171]">
-        A review takes a few minutes. Add the Figma file, the people, the criteria, and the deadline. Publishing invites them — it does not book a meeting.
+    <div className="mx-auto w-full max-w-[640px] px-6 py-8 md:px-0 md:py-2">
+      <h1 className="text-[28px] font-bold tracking-tight">Send a design for review</h1>
+      <p className="mt-1 text-[14px] text-[#717171]">
+        Pick the day it goes out. Everyone in the workspace is on the review until you remove them.
       </p>
-
-      <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-10">
-          <section className="space-y-4">
-            <SectionTitle index="01" title="Review information" />
-            <Field label="Review title">
-              <Input value={draft.title} maxLength={120} onChange={(event) => update({ title: event.target.value })} placeholder="BusinessHub – Access Management" />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Project">
-                <Input value={draft.project} list="projects" maxLength={80} onChange={(event) => update({ project: event.target.value })} placeholder="Sunrise BusinessHub" />
-                <datalist id="projects">
-                  {[...new Set([...PROJECTS, ...reviews.map((review) => review.project)])].map((project) => (
-                    <option key={project} value={project} />
-                  ))}
-                </datalist>
-              </Field>
-              <Field label="Feature or module" hint="Optional">
-                <Input value={draft.feature} maxLength={80} onChange={(event) => update({ feature: event.target.value })} placeholder="Group Management" />
-              </Field>
-            </div>
-            <Field label="Description" hint="What should reviewers look at, and what is out of scope?">
-              <Textarea value={draft.description} maxLength={2000} onChange={(event) => update({ description: event.target.value })} placeholder="Review the updated group management workflow, including creation, editing and permission assignment." />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Design owner">
-                {user.role === "admin" ? (
-                  <NativeSelect value={draft.ownerId} onChange={(event) => update({ ownerId: event.target.value })}>
-                    {users.filter((person) => person.accountStatus === "active").map((person) => (
-                      <option key={person.id} value={person.id}>{person.name}</option>
-                    ))}
-                  </NativeSelect>
-                ) : (
-                  <Input value={users.find((person) => person.id === draft.ownerId)?.name ?? user.name} disabled />
-                )}
-              </Field>
-              <Field label="Design version" hint="Optional">
-                <Input value={draft.designVersion} maxLength={40} onChange={(event) => update({ designVersion: event.target.value })} placeholder="v3.2" />
-              </Field>
-            </div>
-            <Field label="Figma URL" hint="Figma stays the source of truth for visual comments.">
-              <Input value={draft.figmaUrl} inputMode="url" maxLength={300} onChange={(event) => update({ figmaUrl: event.target.value })} placeholder="https://www.figma.com/design/…" />
-            </Field>
-            <Field label="Reference links" hint="Optional briefs or documents.">
-              <div className="flex gap-2">
-                <Input value={link} inputMode="url" onChange={(event) => setLink(event.target.value)} placeholder="https://" />
-                <Button type="button" variant="outline" className="h-12 rounded-xl" onClick={() => {
-                  if (!link.trim()) return
-                  update({ referenceUrls: [...draft.referenceUrls, link.trim()] })
-                  setLink("")
-                }}>Add</Button>
-              </div>
-              <ul className="mt-2 space-y-1">
-                {draft.referenceUrls.map((url) => (
-                  <li key={url} className="flex items-center justify-between gap-3 text-[13px]">
-                    <span className="truncate text-[#717171]">{url}</span>
-                    <button type="button" className={tap} aria-label="Remove link" onClick={() => update({ referenceUrls: draft.referenceUrls.filter((item) => item !== url) })}>
-                      <X className="size-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </Field>
-          </section>
-
-          <section className="space-y-4">
-            <SectionTitle index="02" title="Schedule" body="The dates are the review window. Times are optional and do not mean everyone attends together." />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Start date">
-                <Input type="date" value={draft.startDate} onChange={(event) => update({ startDate: event.target.value })} />
-              </Field>
-              <Field label="Deadline">
-                <Input type="date" value={draft.deadline} onChange={(event) => update({ deadline: event.target.value })} />
-              </Field>
-              <Field label="Start time" hint="Optional">
-                <Input type="time" value={draft.startTime} onChange={(event) => update({ startTime: event.target.value })} />
-              </Field>
-              <Field label="End time" hint="Optional">
-                <Input type="time" value={draft.endTime} onChange={(event) => update({ endTime: event.target.value })} />
-              </Field>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Time zone">
-                <NativeSelect value={draft.timezone} onChange={(event) => update({ timezone: event.target.value })}>
-                  {TIMEZONES.map((zone) => (
-                    <option key={zone.value} value={zone.value}>{zone.label}</option>
-                  ))}
-                </NativeSelect>
-              </Field>
-              <Field label="Reminder" hint="Flags reviewers who have not finished.">
-                <NativeSelect
-                  value={draft.reminderHours === null ? "none" : String(draft.reminderHours)}
-                  onChange={(event) => update({ reminderHours: event.target.value === "none" ? null : Number(event.target.value) })}
-                >
-                  {REMINDER_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </NativeSelect>
-              </Field>
-            </div>
-          </section>
-
-          <section className="space-y-4">
-            <SectionTitle index="03" title="Reviewers" body="Search the workspace or invite someone by email before they have an account." />
-            <Field label="Find a reviewer">
-              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name or email" />
-            </Field>
-            {matches.length > 0 ? (
-              <ul className="overflow-hidden rounded-2xl border border-[#EBEBEB]">
-                {matches.map((person) => (
-                  <li key={person.id}>
-                    <button
-                      type="button"
-                      className={cn("flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-[#F7F7F7]", tap)}
-                      onClick={() => {
-                        update({ reviewers: [...draft.reviewers, { userId: person.id, focus: "" }] })
-                        setQuery("")
-                      }}
-                    >
-                      <Avatar user={person} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-[14px] font-medium">{person.name}</span>
-                        <span className="block text-[12px] text-[#717171]">{person.email}{person.accountStatus === "invited" ? " · Invited" : ""}</span>
-                      </span>
-                      <Plus className="size-4 text-[#717171]" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <ul className="space-y-3">
-              {draft.reviewers.map((reviewer) => {
-                const person = users.find((item) => item.id === reviewer.userId)
-                if (!person) return null
-                return (
-                  <li key={reviewer.userId} className="grid items-center gap-3 rounded-2xl border border-[#EBEBEB] p-3 sm:grid-cols-[1fr_180px_auto]">
-                    <span className="flex items-center gap-3">
-                      <Avatar user={person} />
-                      <span>
-                        <span className="block text-[14px] font-medium">{person.name}</span>
-                        <span className="block text-[12px] text-[#717171]">{person.title}</span>
-                      </span>
-                    </span>
-                    <Input
-                      value={reviewer.focus}
-                      list="focuses"
-                      maxLength={80}
-                      placeholder="Assigned focus"
-                      aria-label={`Focus for ${person.name}`}
-                      onChange={(event) => update({
-                        reviewers: draft.reviewers.map((item) => item.userId === reviewer.userId ? { ...item, focus: event.target.value } : item),
-                      })}
-                    />
-                    <button type="button" className={cn("text-[13px] text-[#717171]", tap)} onClick={() => update({ reviewers: draft.reviewers.filter((item) => item.userId !== reviewer.userId) })}>
-                      Remove
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-            <datalist id="focuses">
-              {FOCUS.map((focus) => <option key={focus} value={focus} />)}
-            </datalist>
-            <details className="rounded-2xl bg-[#F7F7F7] p-4">
-              <summary className={cn("text-[14px] font-medium", tap)}>Invite by email</summary>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <Input value={invite.name} placeholder="Name" aria-label="Invitee name" onChange={(event) => setInvite({ ...invite, name: event.target.value })} />
-                <Input value={invite.email} placeholder="Email" aria-label="Invitee email" onChange={(event) => setInvite({ ...invite, email: event.target.value })} />
-                <Input value={invite.focus} placeholder="Focus" aria-label="Invitee focus" list="focuses" onChange={(event) => setInvite({ ...invite, focus: event.target.value })} />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-3 rounded-xl"
-                onClick={() => {
-                  const result = inviteMember({ name: invite.name, email: invite.email })
-                  if (!result.ok || !result.id) {
-                    toast.error(result.message)
-                    return
-                  }
-                  if (!draft.reviewers.some((item) => item.userId === result.id)) {
-                    update({ reviewers: [...draft.reviewers, { userId: result.id, focus: invite.focus }] })
-                  }
-                  toast.success(result.message)
-                  setInvite({ name: "", email: "", focus: "" })
-                }}
-              >
-                Invite and add
-              </Button>
-            </details>
-          </section>
-
-          <section className="space-y-4">
-            <SectionTitle index="04" title="Criteria" body="Reuse a template, or pick the checks that matter for this work." />
-            <Field label="Template">
-              <NativeSelect
-                value=""
-                onChange={(event) => {
-                  const template = templates.find((item) => item.id === event.target.value)
-                  if (template) update({ criteriaIds: template.criteriaIds })
-                }}
-              >
-                <option value="">Apply a template…</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>{template.name}</option>
-                ))}
-              </NativeSelect>
-            </Field>
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {orderedCriteria.filter((item) => item.active || draft.criteriaIds.includes(item.id)).map((item) => {
-                const on = draft.criteriaIds.includes(item.id)
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => update({
-                        criteriaIds: on ? draft.criteriaIds.filter((id) => id !== item.id) : [...draft.criteriaIds, item.id],
-                      })}
-                      className={cn(
-                        "flex h-full w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left",
-                        tap,
-                        on ? "border-[#222]" : "border-[#EBEBEB]",
-                      )}
-                    >
-                      <span className={cn("mt-0.5 grid size-5 place-items-center rounded-full border", on ? "border-[#222] bg-[#222] text-white" : "border-[#EBEBEB]")}>
-                        {on ? <Check className="size-3" /> : null}
-                      </span>
-                      <span>
-                        <span className="block text-[14px] font-medium">{item.name}</span>
-                        <span className="mt-0.5 block text-[12px] text-[#717171]">{item.category} · {item.description}</span>
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-            <label className="flex items-center justify-between gap-4 rounded-2xl bg-[#F7F7F7] px-4 py-3 text-[14px]">
-              <span>
-                <span className="block font-medium">Reviewers can read each other’s notes</span>
-                <span className="mt-0.5 block text-[12px] text-[#717171]">You always see everything. Drafts stay private to their author.</span>
-              </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={draft.shareFeedback}
-                onClick={() => update({ shareFeedback: !draft.shareFeedback })}
-                className={cn("relative h-6 w-11 rounded-full transition-colors", tap, draft.shareFeedback ? "bg-[#222]" : "bg-[#D6D6D6]")}
-              >
-                <span className={cn("absolute top-0.5 size-5 rounded-full bg-white transition-transform", draft.shareFeedback ? "left-5" : "left-0.5")} />
-              </button>
-            </label>
-          </section>
-
-          {errors.length > 0 ? (
-            <ul className="space-y-1 text-[14px] text-[#D93B3B]">
-              {errors.map((error) => <li key={error}>{error}</li>)}
-            </ul>
-          ) : null}
-
-          <div className="flex flex-wrap gap-3">
-            {existing && existing.lifecycle === "open" ? (
-              <Button type="button" size="lg" onClick={() => save("publish")}>Save changes</Button>
-            ) : (
-              <>
-                <Button type="button" size="lg" onClick={() => save("publish")}>Publish review</Button>
-                <Button type="button" size="lg" variant="outline" onClick={() => save("draft")}>Save as draft</Button>
-              </>
-            )}
-            <Button type="button" size="lg" variant="ghost" onClick={() => router.push(existing ? `/reviews/${existing.id}` : "/reviews")}>
-              Cancel
-            </Button>
-            {existing?.lifecycle === "draft" ? (
-              <Button
-                type="button"
-                size="lg"
-                variant="ghost"
-                className="text-[#D93B3B]"
-                onClick={() => {
-                  const result = deleteDraft(existing.id)
-                  if (!result.ok) toast.error(result.message)
-                  else {
-                    toast.success(result.message)
-                    router.push("/reviews")
-                  }
-                }}
-              >
-                Delete draft
-              </Button>
-            ) : null}
-          </div>
+      <div className="mt-6 rounded-[20px] border border-[#EBEBEB] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+        <label className="mt-1 block text-[13px] font-semibold">Project</label>
+        <select className="field" value={project} onChange={(event) => setProject(event.target.value)}>
+          <option value="">Choose a project</option>
+          {projects.map((item) => (
+            <option key={item}>{item}</option>
+          ))}
+        </select>
+        <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+          <input className="field mt-0" value={newProject} onChange={(event) => setNewProject(event.target.value)} placeholder="Or add a project" />
+          <button type="button" className={cn("btn", tap)} onClick={() => void addProjectName()}>Add</button>
         </div>
-
-        <aside className="rounded-2xl border border-[#EBEBEB] p-5 lg:sticky lg:top-8">
-          <p className="text-[11px] font-medium tracking-[0.08em] text-[#717171] uppercase">Summary</p>
-          <h2 className="mt-3 text-[20px] font-semibold tracking-tight">{draft.title || "Untitled review"}</h2>
-          <dl className="mt-4 space-y-3 text-[14px]">
-            <Row label="Project" value={draft.project || "Not set"} />
-            <Row label="Feature" value={draft.feature || "—"} />
-            <Row label="Window" value={draft.startDate && draft.deadline ? `${windowLabel(draft.startDate, draft.deadline, draft.startTime, draft.endTime)} · ${timezoneLabel(draft.timezone)}` : "Not set"} />
-            <Row label="Figma" value={draft.figmaUrl ? "Link added" : "Missing"} />
-            <Row label="Reviewers" value={draft.reviewers.length ? `${draft.reviewers.length} selected` : "None yet"} />
-            <Row label="Criteria" value={chosenCriteria.length ? chosenCriteria.map((item) => item.name).join(", ") : "None yet"} />
-            <Row label="Deadline" value={draft.deadline ? formatDay(draft.deadline) : "Not set"} />
-          </dl>
-        </aside>
+        <label className="field-label">Review title</label>
+        <input className="field" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Access management flow" />
+        <label className="field-label">Figma link</label>
+        <input className="field" value={figma} onChange={(event) => setFigma(event.target.value)} placeholder="https://figma.com/design/…" />
+        <label className="field-label">Send on</label>
+        <p className="text-[13px] text-[#717171]">Pick a day. Dots show days when other reviews are due.</p>
+        <MiniMonth
+          month={month}
+          selected={sendOn}
+          dueDates={reviews.filter((review) => review.lifecycle !== "archived").map((review) => review.deadline)}
+          onSelect={setSendOn}
+          onMonth={setMonth}
+        />
+        <label className="field-label">Reviewers have</label>
+        <select className="field" value={windowDays} onChange={(event) => setWindowDays(Number(event.target.value))}>
+          {WINDOWS.map((item) => (
+            <option key={item.days} value={item.days}>{item.label}</option>
+          ))}
+        </select>
+        <label className="field-label">Remind reviewers</label>
+        <select className="field" value={reminder} onChange={(event) => setReminder(Number(event.target.value))}>
+          {REMINDER_OPTIONS.map((item) => (
+            <option key={item.value} value={item.value}>{item.label}</option>
+          ))}
+        </select>
+        <label className="field-label">Reviewers</label>
+        <p className="text-[13px] text-[#717171]">Everyone is included. Remove anyone who shouldn’t be on this review, or type an email to invite someone new.</p>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-[12px] border border-[#EBEBEB] bg-white px-2 py-2">
+          {selected.map((person) => (
+            <span key={person.id} className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#F1F3F4] py-0.5 pr-1 pl-1 text-[13px] font-medium text-[#222]">
+              <Avatar user={person} size={20} />
+              <span className="truncate px-0.5">{person.name}</span>
+              <button type="button" className={cn("grid size-5 shrink-0 place-items-center rounded-full text-[#5F6368] hover:bg-[#E0E0E0]", tap)} aria-label={`Remove ${person.name}`} onClick={() => removeReviewer(person.id)}>
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+          <input
+            className="min-w-[160px] flex-1 bg-transparent px-2 py-1 text-[14px] outline-none"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                void addFromQuery()
+              }
+              if (event.key === "Backspace" && !query && selected.length) removeReviewer(selected[selected.length - 1].id)
+            }}
+            placeholder={selected.length ? "" : "Name or email"}
+            aria-label="Add a reviewer"
+          />
+        </div>
+        {suggestions.length ? (
+          <ul className="mt-1 overflow-hidden rounded-[12px] border border-[#EBEBEB]">
+            {suggestions.map((person) => (
+              <li key={person.id}>
+                <button type="button" className={cn("flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#F7F7F7]", tap)} onClick={() => addReviewer(person.id)}>
+                  <Avatar user={person} size={24} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[14px]">{person.name}</span>
+                    <span className="block truncate text-[12px] text-[#717171]">{person.email}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <label className="field-label">Note to reviewers (optional)</label>
+        <textarea className="field min-h-[76px]" value={note} onChange={(event) => setNote(event.target.value)} />
+        <p className="mt-4 text-[13px] text-[#717171]">
+          {selected.length} reviewer{selected.length === 1 ? "" : "s"} · due {addDaysISO(sendOn, windowDays)}
+        </p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button type="button" className={cn("btn", tap)} onClick={() => router.back()}>Cancel</button>
+          <button type="button" className={cn("btn", tap)} onClick={() => submit("draft")}>Save as draft</button>
+          <button type="button" className={cn("btn btn-primary", tap)} onClick={() => submit("publish")}>Send to reviewers</button>
+        </div>
       </div>
     </div>
   )
 }
 
-function SectionTitle({ index, title, body }: { index: string; title: string; body?: string }) {
+function MiniMonth({
+  month,
+  selected,
+  dueDates,
+  onSelect,
+  onMonth,
+}: {
+  month: Date
+  selected: string
+  dueDates: string[]
+  onSelect: (iso: string) => void
+  onMonth: (date: Date) => void
+}) {
+  const start = new Date(month.getFullYear(), month.getMonth(), 1)
+  start.setDate(1 - start.getDay())
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    return date
+  })
+  const counts = new Map<string, number>()
+  for (const due of dueDates) counts.set(due, (counts.get(due) ?? 0) + 1)
   return (
-    <div>
-      <p className="text-[12px] font-medium tracking-[0.08em] text-[#717171]">{index}</p>
-      <h2 className="mt-1 text-[20px] font-semibold tracking-tight">{title}</h2>
-      {body ? <p className="mt-1 text-[14px] leading-6 text-[#717171]">{body}</p> : null}
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[12px] text-[#717171]">{label}</dt>
-      <dd className="mt-0.5 leading-5">{value}</dd>
+    <div className="mt-2">
+      <div className="mb-1 flex items-center justify-between">
+        <b className="text-[14px]">{month.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</b>
+        <span className="flex gap-1">
+          <button type="button" className={cn("btn btn-sm", tap)} aria-label="Previous month" onClick={() => onMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</button>
+          <button type="button" className={cn("btn btn-sm", tap)} aria-label="Next month" onClick={() => onMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button>
+        </span>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center">
+        {["S", "M", "T", "W", "T", "F", "S"].map((label, index) => (
+          <small key={`${label}-${index}`} className="py-1 text-[12px] text-[#717171]">{label}</small>
+        ))}
+        {days.map((date) => {
+          const iso = toISODate(date)
+          const outside = date.getMonth() !== month.getMonth()
+          const due = counts.get(iso) ?? 0
+          return (
+            <button
+              key={iso}
+              type="button"
+              onClick={() => onSelect(iso)}
+              className={cn(
+                "relative h-[38px] rounded-[10px] text-[14px] font-medium",
+                tap,
+                outside && "opacity-40",
+                iso === selected ? "bg-[#FF385C] text-white" : "hover:bg-[#F7F7F7]",
+              )}
+              title={due ? `${due} review${due === 1 ? "" : "s"} due` : undefined}
+            >
+              {date.getDate()}
+              {due ? <i className={cn("absolute bottom-1 left-1/2 size-[5px] -translate-x-1/2 rounded-full", iso === selected ? "bg-white" : "bg-[#008A5B]")} /> : null}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

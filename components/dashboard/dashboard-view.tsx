@@ -15,7 +15,7 @@ import type { Phase } from "@/lib/types"
 const barPhases: Phase[] = ["scheduled", "in_progress", "feedback_pending", "completed"]
 
 export function DashboardView() {
-  const { user, users, reviews, activities, workspace } = useWorkspace()
+  const { user, users, reviews, activities, workspace, criteria } = useWorkspace()
   if (!user || !workspace) return null
   const people = new Map(users.map((person) => [person.id, person]))
   const visible = reviews.filter((review) => canSeeReview(user, review))
@@ -35,7 +35,10 @@ export function DashboardView() {
   const stats = [
     { label: "Total reviews", value: visible.filter((review) => review.lifecycle !== "archived").length },
     { label: "Upcoming", value: visible.filter((review) => phaseOf(review) === "scheduled").length },
-    { label: "In progress", value: visible.filter((review) => phaseOf(review) === "in_progress").length },
+    { label: "In progress", value: visible.filter((review) => {
+      const phase = phaseOf(review)
+      return phase === "in_progress" || phase === "feedback_pending"
+    }).length },
     { label: "Completed", value: visible.filter((review) => phaseOf(review) === "completed").length },
     {
       label: "Pending feedback",
@@ -64,10 +67,24 @@ export function DashboardView() {
         action={
           <Link href="/reviews/new" className={cn(buttonVariants({ size: "lg" }))}>
             <Plus />
-            Create review
+            Send a design
           </Link>
         }
       />
+
+      {visible.length === 0 ? (
+        <section className="mt-8 rounded-2xl border border-[#EBEBEB] p-5">
+          <h2 className="text-[16px] font-semibold">Set up this workspace</h2>
+          <p className="mt-1 text-[14px] text-[#717171]">
+            Add the projects you design, the people who review them, and the criteria you want checked. Then send a design.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/settings?tab=projects" className="chip">{workspace.projects.length} project{workspace.projects.length === 1 ? "" : "s"}</Link>
+            <Link href="/settings?tab=people" className="chip">{Math.max(users.length - 1, 0)} reviewer{users.length - 1 === 1 ? "" : "s"} invited</Link>
+            <Link href="/settings?tab=criteria" className="chip">{criteria.filter((item) => item.active).length} active criteria</Link>
+          </div>
+        </section>
+      ) : null}
 
       {needsYou.length > 0 ? (
         <section className="mt-8 rounded-2xl border border-[#EBEBEB] px-5 py-4">

@@ -37,6 +37,8 @@ export type Workspace = {
   name: string
   timezone: string
   reminderHours: number | null
+  projects: string[]
+  theme: "light" | "dark"
 }
 
 export type Criterion = {

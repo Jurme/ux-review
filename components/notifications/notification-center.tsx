@@ -19,7 +19,7 @@ export function NotificationCenter() {
         eyebrow="Inbox"
         title="Notifications"
         description="Invitations, reminders, and responses land here. In this sample they stay in the workspace instead of going out by email."
-        action={items.some((item) => !item.read) ? <Button variant="outline" onClick={() => markAllRead()}>Mark all read</Button> : undefined}
+        action={items.some((item) => !item.read) ? <Button variant="outline" onClick={() => { void markAllRead() }}>Mark all read</Button> : undefined}
       />
       {items.length === 0 ? (
         <div className="mt-8">
@@ -33,7 +33,7 @@ export function NotificationCenter() {
               <li key={item.id}>
                 <Link
                   href={href}
-                  onClick={() => { if (!item.read) markRead(item.id) }}
+                  onClick={() => { if (!item.read) void markRead(item.id) }}
                   className={cn("flex gap-3 py-4", tap)}
                 >
                   <span className={cn("mt-2 size-2 shrink-0 rounded-full", item.read ? "bg-transparent" : "bg-[#FF385C]")} />

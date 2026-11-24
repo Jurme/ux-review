@@ -1,24 +1,101 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
-import { Avatar, Boot, Mark } from "@/components/common"
-import { signIn, useWorkspace } from "@/lib/store"
-import type { Provider } from "@/lib/types"
+import { signIn, signOut } from "next-auth/react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useState, type ReactNode } from "react"
+import { Boot, Mark } from "@/components/common"
+import { useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { tap } from "@/lib/presentation"
 
 export function LoginScreen() {
-  const { ready, user, users } = useWorkspace()
+  const { ready, user, gate, inviteEmail } = useWorkspace()
   const router = useRouter()
-  const [provider, setProvider] = useState<Provider | null>(null)
+  const params = useSearchParams()
+  const [providers, setProviders] = useState<{ google: boolean; microsoft: boolean } | null>(null)
+  const [origin, setOrigin] = useState("")
 
   useEffect(() => {
     if (ready && user) router.replace("/dashboard")
   }, [ready, user, router])
 
+  useEffect(() => {
+    const here = window.location.origin
+    void fetch("/api/auth/providers")
+      .then((response) => response.json())
+      .then((body: Record<string, unknown>) => {
+        setOrigin(here)
+        setProviders({ google: "google" in body, microsoft: "microsoft-entra-id" in body })
+      })
+      .catch(() => {
+        setOrigin(here)
+        setProviders({ google: false, microsoft: false })
+      })
+  }, [])
+
   if (!ready || user) return <Boot label="Opening workspace" />
 
+  const error = params.get("error")
+  const missing = providers && !providers.google && !providers.microsoft
+
+  if (gate === "invite") {
+    return (
+      <Shell>
+        <h1 className="text-[32px] font-semibold tracking-tight">This workspace hasn’t invited you</h1>
+        <p className="mt-3 text-[16px] leading-7 text-[#717171]">
+          You’re signed in as {inviteEmail || "this account"}. An admin needs to invite that email before you can open reviews.
+        </p>
+        <button type="button" className={cn("btn mt-8", tap)} onClick={() => signOut({ callbackUrl: "/login" })}>
+          Sign out
+        </button>
+      </Shell>
+    )
+  }
+
+  return (
+    <Shell>
+      <h1 className="text-[32px] font-semibold tracking-tight">Welcome to UX Review</h1>
+      <p className="mt-3 text-[16px] leading-7 text-[#717171]">
+        Sign in with your Google or Microsoft account. You’ll land in the workspace as yourself — there is no list of people to choose from.
+      </p>
+      {error ? (
+        <p className="mt-4 rounded-xl bg-[#FDECEC] px-3 py-2 text-[13px] text-[#D93B3B]">
+          {error === "Configuration"
+            ? "Sign-in isn’t configured yet. Add the Google and Microsoft credentials, then try again."
+            : "Sign-in didn’t finish. Try again with the same account."}
+        </p>
+      ) : null}
+      <div className="mt-8 space-y-3">
+        <ProviderButton
+          label="Continue with Google"
+          mark={<GoogleMark />}
+          disabled={!providers?.google}
+          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
+        />
+        <ProviderButton
+          label="Continue with Microsoft"
+          mark={<MicrosoftMark />}
+          disabled={!providers?.microsoft}
+          onClick={() => signIn("microsoft-entra-id", { callbackUrl: "/dashboard" })}
+        />
+      </div>
+      {missing ? (
+        <div className="mt-6 space-y-2 text-[13px] leading-5 text-[#717171]">
+          <p>Google and Microsoft aren’t connected on this server yet. Add these secrets for the app, then restart:</p>
+          <p className="font-medium text-[#222]">AUTH_SECRET, AUTH_GOOGLE_ID, AUTH_GOOGLE_SECRET, AUTH_MICROSOFT_ID, AUTH_MICROSOFT_SECRET</p>
+          <p>In each provider, allow these redirect URLs:</p>
+          <p className="break-all">{origin}/api/auth/callback/google</p>
+          <p className="break-all">{origin}/api/auth/callback/microsoft-entra-id</p>
+          <p>AUTH_MICROSOFT_TENANT is optional. Leave it unset to allow any work or personal Microsoft account.</p>
+        </div>
+      ) : (
+        <p className="mt-6 text-[13px] text-[#717171]">The first person to sign in becomes the admin and can invite everyone else by email.</p>
+      )}
+    </Shell>
+  )
+}
+
+function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-dvh lg:grid-cols-2">
       <section className="flex flex-col justify-between px-6 py-8 sm:px-12 lg:px-16">
@@ -26,67 +103,8 @@ export function LoginScreen() {
           <Mark />
           <span className="text-[15px] font-semibold tracking-tight">UX Review</span>
         </div>
-        <div className="mx-auto w-full max-w-[420px] py-16">
-          {provider ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setProvider(null)}
-                className={cn("text-[13px] font-medium text-[#717171] hover:text-[#222]", tap)}
-              >
-                All sign-in options
-              </button>
-              <h1 className="mt-4 text-[30px] font-semibold tracking-tight">
-                Continue with {provider === "google" ? "Google" : "Microsoft"}
-              </h1>
-              <p className="mt-3 text-[15px] leading-6 text-[#717171]">
-                Choose the Sunrise Studio account that matches this email. Membership is separate from sign-in, so an invited reviewer can enter after their first login.
-              </p>
-              <ul className="mt-8 space-y-2">
-                {users.map((person) => (
-                  <li key={person.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        signIn(person.id, provider)
-                        router.push("/dashboard")
-                      }}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-2xl border border-[#EBEBEB] px-3 py-3 text-left hover:bg-[#F7F7F7]",
-                        tap,
-                      )}
-                    >
-                      <Avatar user={person} size={40} />
-                      <span className="min-w-0">
-                        <span className="block truncate text-[15px] font-medium">{person.name}</span>
-                        <span className="block truncate text-[13px] text-[#717171]">
-                          {person.email}
-                          {person.accountStatus === "invited" ? " · Invited" : ""}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            <>
-              <h1 className="text-[32px] font-semibold tracking-tight">Welcome to UX Review</h1>
-              <p className="mt-3 text-[16px] leading-7 text-[#717171]">
-                Sign in to manage your design reviews and collaborate with your team.
-              </p>
-              <div className="mt-8 space-y-3">
-                <ProviderButton provider="google" onClick={() => setProvider("google")} />
-                <ProviderButton provider="microsoft" onClick={() => setProvider("microsoft")} />
-              </div>
-              <p className="mt-6 text-[13px] text-[#717171]">Secure authentication · No separate password required</p>
-              <p className="mt-3 text-[13px] leading-5 text-[#717171]">
-                This is a sample workspace stored in your browser. These buttons do not contact Google or Microsoft and never ask for a password.
-              </p>
-            </>
-          )}
-        </div>
-        <p className="text-[12px] text-[#717171]">Sunrise Studio · Asynchronous design reviews</p>
+        <div className="mx-auto w-full max-w-[460px] py-16">{children}</div>
+        <p className="text-[12px] text-[#717171]">Asynchronous design reviews</p>
       </section>
       <aside className="hidden bg-[#F7F7F7] lg:flex lg:items-center lg:justify-center lg:p-16">
         <div className="w-full max-w-[440px]">
@@ -95,24 +113,9 @@ export function LoginScreen() {
             Nobody has to be in a room for the review to move.
           </h2>
           <div className="mt-8 space-y-3">
-            <PreviewCard
-              title="BusinessHub – Access Management"
-              meta="Sunrise BusinessHub · Due in 3 days"
-              status="In progress"
-              tone="text-[#C41E45] bg-[#FFF1F3]"
-            />
-            <PreviewCard
-              title="Notification preferences"
-              meta="Needs your notes today"
-              status="Due today"
-              tone="text-[#8A5A12] bg-[#FBF6EE]"
-            />
-            <PreviewCard
-              title="Pricing page refresh"
-              meta="Opens tomorrow · 3 reviewers"
-              status="Scheduled"
-              tone="text-[#222] bg-white"
-            />
+            <PreviewCard title="Access management" meta="Due in 3 days" status="In progress" tone="text-[#B7791F] bg-[#FFF1D6]" />
+            <PreviewCard title="Notification preferences" meta="Needs notes today" status="Due today" tone="text-[#FF385C] bg-[#FFE3E8]" />
+            <PreviewCard title="Pricing page refresh" meta="Opens tomorrow · 3 reviewers" status="Scheduled" tone="text-[#2B5CC7] bg-[#E8F0FE]" />
           </div>
         </div>
       </aside>
@@ -120,18 +123,18 @@ export function LoginScreen() {
   )
 }
 
-function ProviderButton({ provider, onClick }: { provider: Provider; onClick: () => void }) {
-  const label = provider === "google" ? "Continue with Google" : "Continue with Microsoft"
+function ProviderButton({ label, mark, disabled, onClick }: { label: string; mark: ReactNode; disabled: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#EBEBEB] bg-white text-[15px] font-medium hover:bg-[#F7F7F7]",
+        "flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#EBEBEB] bg-white text-[15px] font-medium hover:bg-[#F7F7F7] disabled:cursor-not-allowed disabled:opacity-50",
         tap,
       )}
     >
-      {provider === "google" ? <GoogleMark /> : <MicrosoftMark />}
+      {mark}
       {label}
     </button>
   )

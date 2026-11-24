@@ -1,8 +1,5 @@
-import type { Metadata } from "next"
-import { CriteriaManager } from "@/components/criteria/criteria-manager"
-
-export const metadata: Metadata = { title: "Review criteria" }
+import { redirect } from "next/navigation"
 
 export default function CriteriaPage() {
-  return <CriteriaManager />
+  redirect("/settings?tab=criteria")
 }

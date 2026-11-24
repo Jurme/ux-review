@@ -1,8 +1,5 @@
-import type { Metadata } from "next"
-import { ReviewerDirectory } from "@/components/reviewers/reviewer-directory"
-
-export const metadata: Metadata = { title: "Reviewers" }
+import { redirect } from "next/navigation"
 
 export default function ReviewersPage() {
-  return <ReviewerDirectory />
+  redirect("/settings?tab=people")
 }
