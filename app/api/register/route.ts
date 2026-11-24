@@ -9,7 +9,16 @@ export async function POST(request: Request) {
   if (!name) return Response.json({ ok: false, message: "Enter your name." }, { status: 400 })
   if (!isEmail(email)) return Response.json({ ok: false, message: "Enter a valid email address." }, { status: 400 })
   if (password.length < 8) return Response.json({ ok: false, message: "Use a password of at least 8 characters." }, { status: 400 })
-  const result = await registerCredential({ name, email, password })
-  if (!result.ok) return Response.json(result, { status: 409 })
-  return Response.json({ ok: true })
+  try {
+    const result = await registerCredential({ name, email, password })
+    if (!result.ok) return Response.json(result, { status: 409 })
+    return Response.json({ ok: true })
+  } catch (error) {
+    console.error(error)
+    const detail = error instanceof Error ? error.message : ""
+    const message = detail.includes("POSTGRES_URL")
+      ? "The database is not connected. Add the Supabase connection string on Vercel, then try again."
+      : "Could not create the account. Try again."
+    return Response.json({ ok: false, message }, { status: 500 })
+  }
 }
