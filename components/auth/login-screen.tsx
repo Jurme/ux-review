@@ -13,6 +13,7 @@ export function LoginScreen() {
   const { ready, user, gate, inviteEmail } = useWorkspace()
   const router = useRouter()
   const params = useSearchParams()
+  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in")
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -49,10 +50,21 @@ export function LoginScreen() {
       setNotice("Enter your email and password.")
       return
     }
+    if (mode === "sign-up" && !name.trim()) {
+      setNotice("Enter your name.")
+      return
+    }
     setNotice("")
     setPending(true)
     try {
-      if (await finishSignIn()) return
+      if (mode === "sign-in") {
+        if (!(await finishSignIn())) {
+          const message = "That email or password is wrong."
+          setNotice(message)
+          toast.error(message)
+        }
+        return
+      }
       const response = await fetch("/api/register", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -60,13 +72,13 @@ export function LoginScreen() {
       })
       const body = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null
       if (response.status === 409) {
-        const message = "That email or password is wrong."
+        const message = "An account with that email already exists. Sign in instead."
         setNotice(message)
         toast.error(message)
         return
       }
       if (!response.ok || !body?.ok) {
-        const message = body?.message || "Enter your name to create an account."
+        const message = body?.message || "Could not create the account."
         setNotice(message)
         toast.error(message)
         return
@@ -97,9 +109,25 @@ export function LoginScreen() {
 
   return (
     <Shell>
-      <h1 className="text-[32px] font-semibold tracking-tight">Welcome to UX Review</h1>
+      <div className="grid grid-cols-2 rounded-xl bg-[#F7F7F7] p-1">
+        <button
+          type="button"
+          className={cn("h-10 rounded-lg text-[14px] font-medium", mode === "sign-in" ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#717171]", tap)}
+          onClick={() => { setMode("sign-in"); setNotice("") }}
+        >
+          Sign in
+        </button>
+        <button
+          type="button"
+          className={cn("h-10 rounded-lg text-[14px] font-medium", mode === "sign-up" ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#717171]", tap)}
+          onClick={() => { setMode("sign-up"); setNotice("") }}
+        >
+          Sign up
+        </button>
+      </div>
+      <h1 className="mt-8 text-[32px] font-semibold tracking-tight">{mode === "sign-in" ? "Sign in" : "Create an account"}</h1>
       <p className="mt-3 text-[16px] leading-7 text-[#717171]">
-        Sign in with your email and password. You’ll land in the workspace as yourself.
+        {mode === "sign-in" ? "Use the email and password for your account." : "Your name is how teammates see you in reviews."}
       </p>
       {error || notice ? (
         <p className="mt-4 rounded-xl bg-[#FDECEC] px-3 py-2 text-[13px] text-[#D93B3B]">
@@ -113,14 +141,18 @@ export function LoginScreen() {
           void submitEmail()
         }}
       >
-        <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name, if this is your first time" autoComplete="name" aria-label="Name" />
+        {mode === "sign-up" ? (
+          <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" autoComplete="name" aria-label="Name" />
+        ) : null}
         <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" autoComplete="email" aria-label="Email" />
-        <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete="current-password" aria-label="Password" />
+        <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete={mode === "sign-up" ? "new-password" : "current-password"} aria-label="Password" />
         <button type="submit" className={cn("btn btn-primary w-full", tap)} disabled={pending}>
-          {pending ? "Please wait…" : "Continue"}
+          {pending ? "Please wait…" : mode === "sign-in" ? "Sign in" : "Create account"}
         </button>
       </form>
-      <p className="mt-4 text-[13px] text-[#717171]">Use the same email next time. A new email creates your account and opens the workspace.</p>
+      <p className="mt-4 text-[13px] text-[#717171]">
+        {mode === "sign-in" ? "New to the workspace? Choose Sign up." : "Already have an account? Choose Sign in."}
+      </p>
     </Shell>
   )
 }

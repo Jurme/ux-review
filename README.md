@@ -15,7 +15,7 @@ Open the local URL printed by Next.js. The dev server uses port **3847**.
 
 ## Sign in
 
-The welcome screen signs you in with email and password. A new email creates the account. You arrive as that account. There is no list of people to pick from.
+The welcome screen has Sign in and Sign up. Sign in asks for email and password. Sign up also asks for your name. You arrive as that account. There is no list of people to pick from.
 
 The first person to sign in becomes the admin of an empty workspace. Anyone who signs in after that joins as themselves. Projects and criteria are added in Settings. Reviewers are people who have already signed in.
 
