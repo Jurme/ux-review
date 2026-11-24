@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import { Boot, Mark } from "@/components/common"
-import { useWorkspace } from "@/lib/store"
+import { refreshWorkspace, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { tap } from "@/lib/presentation"
 
@@ -18,16 +18,36 @@ export function LoginScreen() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [pending, setPending] = useState(false)
+  const [notice, setNotice] = useState("")
+  const [providers, setProviders] = useState<{ google: boolean; microsoft: boolean } | null>(null)
 
   useEffect(() => {
     if (ready && user) router.replace("/dashboard")
   }, [ready, user, router])
 
-  if (!ready || user) return <Boot label="Opening workspace" />
+  useEffect(() => {
+    const controller = new AbortController()
+    void fetch("/api/auth/providers", { signal: controller.signal })
+      .then((response) => response.json())
+      .then((body: Record<string, unknown>) => {
+        setProviders({ google: "google" in body, microsoft: "microsoft-entra-id" in body })
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setProviders({ google: false, microsoft: false })
+      })
+    return () => controller.abort()
+  }, [])
+
+  if (ready && user) return <Boot label="Opening workspace" />
 
   const error = params.get("error")
 
   async function submitEmail() {
+    if (!email.trim() || !password) {
+      setNotice("Enter your email and password.")
+      return
+    }
+    setNotice("")
     setPending(true)
     try {
       if (mode === "create") {
@@ -38,20 +58,44 @@ export function LoginScreen() {
         })
         const body = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null
         if (!response.ok || !body?.ok) {
-          toast.error(body?.message || "Could not create the account.")
+          const message = body?.message || "Could not create the account."
+          setNotice(message)
+          toast.error(message)
           return
         }
       }
-      const result = await signIn("credentials", { email, password, redirect: false, callbackUrl: "/dashboard" })
-      if (result?.error) {
-        toast.error(mode === "create" ? "Account created, but sign-in did not finish. Try again." : "That email or password is wrong.")
+      let result
+      try {
+        result = await signIn("credentials", { email, password, redirect: false, redirectTo: "/dashboard" })
+      } catch {
+        const message = "Sign-in didn’t finish. Try again."
+        setNotice(message)
+        toast.error(message)
         return
       }
+      if (!result || result.error || result.ok === false) {
+        const message = mode === "create" ? "Account created, but sign-in did not finish. Try again." : "That email or password is wrong."
+        setNotice(message)
+        toast.error(message)
+        return
+      }
+      await refreshWorkspace()
       router.push("/dashboard")
       router.refresh()
     } finally {
       setPending(false)
     }
+  }
+
+  function startProvider(kind: "google" | "microsoft") {
+    const available = kind === "google" ? providers?.google : providers?.microsoft
+    if (!available) {
+      const message = "Google and Microsoft aren’t connected on this server yet. Sign in with email and password."
+      setNotice(message)
+      toast.error(message)
+      return
+    }
+    void signIn(kind === "google" ? "google" : "microsoft-entra-id", { callbackUrl: "/dashboard" })
   }
 
   if (gate === "invite") {
@@ -74,14 +118,14 @@ export function LoginScreen() {
       <p className="mt-3 text-[16px] leading-7 text-[#717171]">
         Sign in with Google, Microsoft, or your email. You’ll land in the workspace as yourself.
       </p>
-      {error ? (
+      {error || notice ? (
         <p className="mt-4 rounded-xl bg-[#FDECEC] px-3 py-2 text-[13px] text-[#D93B3B]">
-          Google or Microsoft didn’t finish. Use your email and password below.
+          {notice || "Google or Microsoft didn’t finish. Use your email and password below."}
         </p>
       ) : null}
       <div className="mt-8 space-y-3">
-        <ProviderButton label="Continue with Google" mark={<GoogleMark />} onClick={() => signIn("google", { callbackUrl: "/dashboard" })} />
-        <ProviderButton label="Continue with Microsoft" mark={<MicrosoftMark />} onClick={() => signIn("microsoft-entra-id", { callbackUrl: "/dashboard" })} />
+        <ProviderButton label="Continue with Google" mark={<GoogleMark />} onClick={() => startProvider("google")} />
+        <ProviderButton label="Continue with Microsoft" mark={<MicrosoftMark />} onClick={() => startProvider("microsoft")} />
       </div>
       <div className="my-6 flex items-center gap-3 text-[12px] text-[#717171]">
         <span className="h-px flex-1 bg-[#EBEBEB]" />

@@ -30,7 +30,14 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", onKey)
   }, [open])
 
-  if (!ready || gate === "loading" || gate === "signed_out") return <Boot />
+  if (!ready || gate === "loading" || gate === "signed_out") {
+    return (
+      <>
+        <Boot />
+        <div className="hidden">{children}</div>
+      </>
+    )
+  }
   if (gate === "invite" || !user) {
     return (
       <div className="grid min-h-dvh place-items-center px-6">
@@ -41,6 +48,7 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
           </p>
           <button type="button" className={cn("btn mt-6", tap)} onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</button>
         </div>
+        <div className="hidden">{children}</div>
       </div>
     )
   }

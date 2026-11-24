@@ -23,21 +23,25 @@ function publish(next: Snap) {
 }
 
 export async function refreshWorkspace() {
-  const response = await fetch("/api/workspace", { cache: "no-store" })
-  if (response.status === 401) {
+  try {
+    const response = await fetch("/api/workspace", { cache: "no-store", signal: AbortSignal.timeout(8000) })
+    if (response.status === 401) {
+      publish({ gate: "signed_out" })
+      return
+    }
+    const body = (await response.json().catch(() => null)) as { state?: AppState; revision?: number; email?: string } | null
+    if (response.status === 403) {
+      publish({ gate: "invite", email: body?.email ?? "" })
+      return
+    }
+    if (!response.ok || !body?.state || typeof body.revision !== "number") {
+      publish({ gate: "signed_out" })
+      return
+    }
+    publish({ gate: "ready", state: body.state, revision: body.revision })
+  } catch {
     publish({ gate: "signed_out" })
-    return
   }
-  const body = (await response.json().catch(() => null)) as { state?: AppState; revision?: number; email?: string } | null
-  if (response.status === 403) {
-    publish({ gate: "invite", email: body?.email ?? "" })
-    return
-  }
-  if (!response.ok || !body?.state || typeof body.revision !== "number") {
-    publish({ gate: "signed_out" })
-    return
-  }
-  publish({ gate: "ready", state: body.state, revision: body.revision })
 }
 
 function bootstrap() {
