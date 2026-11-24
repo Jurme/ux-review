@@ -1,4 +1,4 @@
-import NextAuth from "next-auth"
+import NextAuth, { CredentialsSignin } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import Google from "next-auth/providers/google"
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id"
@@ -28,6 +28,14 @@ if (microsoftId && microsoftSecret) {
   )
 }
 
+class NoAccount extends CredentialsSignin {
+  code = "no_account"
+}
+
+class WrongPassword extends CredentialsSignin {
+  code = "wrong_password"
+}
+
 providers.push(
   Credentials({
     name: "Email",
@@ -39,7 +47,8 @@ providers.push(
       const email = String(credentials?.email ?? "")
       const password = String(credentials?.password ?? "")
       const account = await checkCredential(email, password)
-      if (!account) return null
+      if (account === "missing") throw new NoAccount()
+      if (account === "password") throw new WrongPassword()
       return { id: account.email, email: account.email, name: account.name }
     },
   }),

@@ -1,8 +1,10 @@
-import { readdir, readFile } from "node:fs/promises"
+import { mkdir, readdir, readFile } from "node:fs/promises"
+import path from "node:path"
 import { PGlite } from "@electric-sql/pglite"
 import pg from "pg"
 
 const databaseUrl = process.env.DATABASE_URL?.trim() ?? ""
+const localDir = path.join(process.cwd(), ".data", "pglite")
 
 const holders = globalThis as unknown as {
   uxReviewPool?: pg.Pool
@@ -25,7 +27,9 @@ export async function sql<T = Record<string, unknown>>(
 }
 
 async function startLocal(): Promise<PGlite> {
-  const db = new PGlite()
+  await mkdir(localDir, { recursive: true })
+  const db = new PGlite(localDir)
+  await db.waitReady
   const files = (await readdir("migrations").catch(() => [])).filter((file) => file.endsWith(".sql")).sort()
   for (const file of files) {
     await db.exec(await readFile(`migrations/${file}`, "utf8"))

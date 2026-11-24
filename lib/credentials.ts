@@ -32,8 +32,8 @@ export async function registerCredential(input: { name: string; email: string; p
 
 export async function checkCredential(email: string, password: string) {
   const row = await findCredential(email)
-  if (!row) return null
+  if (!row) return "missing" as const
   const matches = await verifyPassword(password, row.password_hash)
-  if (!matches) return null
+  if (!matches) return "password" as const
   return { email: row.email, name: row.name }
 }

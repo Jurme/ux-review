@@ -33,16 +33,17 @@ export function LoginScreen() {
     try {
       result = await signIn("credentials", { email, password, redirect: false, redirectTo: "/dashboard" })
     } catch {
-      const message = "Sign-in didn’t finish. Try again."
-      setNotice(message)
-      toast.error(message)
-      return true
+      return "failed" as const
     }
-    if (!result || result.error || result.ok === false) return false
+    if (!result || result.error || result.ok === false) {
+      if (result?.code === "no_account") return "no_account" as const
+      if (result?.code === "wrong_password") return "wrong_password" as const
+      return "failed" as const
+    }
     await refreshWorkspace()
     router.push("/dashboard")
     router.refresh()
-    return true
+    return "ok" as const
   }
 
   async function submitEmail() {
@@ -58,8 +59,13 @@ export function LoginScreen() {
     setPending(true)
     try {
       if (mode === "sign-in") {
-        if (!(await finishSignIn())) {
-          const message = "That email or password is wrong."
+        const outcome = await finishSignIn()
+        if (outcome === "no_account") {
+          const message = "No account for that email. Choose Sign up."
+          setNotice(message)
+          toast.error(message)
+        } else if (outcome !== "ok") {
+          const message = outcome === "wrong_password" ? "That password is wrong." : "Sign-in didn’t finish. Try again."
           setNotice(message)
           toast.error(message)
         }
@@ -83,7 +89,8 @@ export function LoginScreen() {
         toast.error(message)
         return
       }
-      if (!(await finishSignIn())) {
+      const outcome = await finishSignIn()
+      if (outcome !== "ok") {
         const message = "Account created, but sign-in did not finish. Try again."
         setNotice(message)
         toast.error(message)

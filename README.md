@@ -19,7 +19,7 @@ The welcome screen has Sign in and Sign up. Sign in asks for email and password.
 
 The first person to sign in becomes the admin of an empty workspace. Anyone who signs in after that joins as themselves. Projects and criteria are added in Settings. Reviewers are people who have already signed in.
 
-The dev server uses an in-memory database when `DATABASE_URL` is unset.
+Accounts and the workspace are kept in `.data/` on this machine when `DATABASE_URL` is unset, so sign-in still works after the server restarts. Published copies use Postgres.
 
 ## What you can do
 
@@ -34,4 +34,4 @@ Settings can load a Sunrise Studio sample. You stay signed in as yourself.
 
 ## Stack
 
-Next.js, React, TypeScript, and Tailwind. Interface primitives come from shadcn/ui. Sign-in is email and password through Auth.js. The workspace is stored in Postgres when the app is published, and in memory during local development.
+Next.js, React, TypeScript, and Tailwind. Interface primitives come from shadcn/ui. Sign-in is email and password through Auth.js. The workspace is stored in Postgres when the app is published, and in `.data/` during local development.
