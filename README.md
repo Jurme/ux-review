@@ -36,7 +36,7 @@ Settings can load a Sunrise Studio sample. You stay signed in as yourself.
 
 Create a Supabase project, then either install the Supabase integration on the Vercel project or set the env vars yourself.
 
-Set `POSTGRES_URL` to the **Transaction pooler** connection string (host `pooler.supabase.com`, port `6543`). The Vercel integration sets this for you. Also set `AUTH_SECRET` to a long random string so sessions stay valid across servers.
+Set `POSTGRES_URL` to the **Transaction pooler** connection string (host `pooler.supabase.com`, port `6543`). Replace `[YOUR-PASSWORD]` in that string with the database password before saving it. The Vercel integration sets this for you. Also set `AUTH_SECRET` to a long random string so sessions stay valid across servers.
 
 The production build does not connect to the database. Tables are created on the first request. `POSTGRES_URL_NON_POOLING` is optional.
 

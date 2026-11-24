@@ -1,5 +1,6 @@
-import { isEmail } from "@/lib/format"
 import { registerCredential } from "@/lib/credentials"
+import { explainDatabaseError } from "@/lib/db"
+import { isEmail } from "@/lib/format"
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { name?: unknown; email?: unknown; password?: unknown } | null
@@ -14,11 +15,8 @@ export async function POST(request: Request) {
     if (!result.ok) return Response.json(result, { status: 409 })
     return Response.json({ ok: true })
   } catch (error) {
-    console.error(error)
-    const detail = error instanceof Error ? error.message : ""
-    const message = detail.includes("POSTGRES_URL")
-      ? "The database is not connected. Add the Supabase connection string on Vercel, then try again."
-      : "Could not create the account. Try again."
-    return Response.json({ ok: false, message }, { status: 500 })
+    const detail = error instanceof Error ? error.message : String(error)
+    console.error(detail.replace(/postgres(?:ql)?:\/\/\S+/gi, "postgres://[redacted]"))
+    return Response.json({ ok: false, message: explainDatabaseError(error) }, { status: 500 })
   }
 }

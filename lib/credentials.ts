@@ -8,7 +8,12 @@ let ready: Promise<void> | undefined
 async function ensureTable() {
   ready ??= sql(
     "create table if not exists account_credentials (email text primary key, name text not null, password_hash text not null, created_at timestamptz not null default now())",
-  ).then(() => undefined)
+  )
+    .then(() => undefined)
+    .catch((error: unknown) => {
+      ready = undefined
+      throw error
+    })
   await ready
 }
 
