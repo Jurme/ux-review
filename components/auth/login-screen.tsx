@@ -18,24 +18,10 @@ export function LoginScreen() {
   const [password, setPassword] = useState("")
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState("")
-  const [providers, setProviders] = useState<{ google: boolean; microsoft: boolean } | null>(null)
 
   useEffect(() => {
     if (ready && user) router.replace("/dashboard")
   }, [ready, user, router])
-
-  useEffect(() => {
-    const controller = new AbortController()
-    void fetch("/api/auth/providers", { signal: controller.signal })
-      .then((response) => response.json())
-      .then((body: Record<string, unknown>) => {
-        setProviders({ google: "google" in body, microsoft: "microsoft-entra-id" in body })
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setProviders({ google: false, microsoft: false })
-      })
-    return () => controller.abort()
-  }, [])
 
   if (ready && user) return <Boot label="Opening workspace" />
 
@@ -95,17 +81,6 @@ export function LoginScreen() {
     }
   }
 
-  function startProvider(kind: "google" | "microsoft") {
-    const available = kind === "google" ? providers?.google : providers?.microsoft
-    if (!available) {
-      const message = "Google and Microsoft aren’t connected on this server yet. Sign in with email and password."
-      setNotice(message)
-      toast.error(message)
-      return
-    }
-    void signIn(kind === "google" ? "google" : "microsoft-entra-id", { callbackUrl: "/dashboard" })
-  }
-
   if (gate === "invite") {
     return (
       <Shell>
@@ -124,24 +99,15 @@ export function LoginScreen() {
     <Shell>
       <h1 className="text-[32px] font-semibold tracking-tight">Welcome to UX Review</h1>
       <p className="mt-3 text-[16px] leading-7 text-[#717171]">
-        Sign in with Google, Microsoft, or your email. You’ll land in the workspace as yourself.
+        Sign in with your email and password. You’ll land in the workspace as yourself.
       </p>
       {error || notice ? (
         <p className="mt-4 rounded-xl bg-[#FDECEC] px-3 py-2 text-[13px] text-[#D93B3B]">
-          {notice || "Google or Microsoft didn’t finish. Use your email and password below."}
+          {notice || "Sign-in didn’t finish. Use your email and password."}
         </p>
       ) : null}
-      <div className="mt-8 space-y-3">
-        <ProviderButton label="Continue with Google" mark={<GoogleMark />} onClick={() => startProvider("google")} />
-        <ProviderButton label="Continue with Microsoft" mark={<MicrosoftMark />} onClick={() => startProvider("microsoft")} />
-      </div>
-      <div className="my-6 flex items-center gap-3 text-[12px] text-[#717171]">
-        <span className="h-px flex-1 bg-[#EBEBEB]" />
-        or
-        <span className="h-px flex-1 bg-[#EBEBEB]" />
-      </div>
       <form
-        className="space-y-3"
+        className="mt-8 space-y-3"
         onSubmit={(event) => {
           event.preventDefault()
           void submitEmail()
@@ -187,22 +153,6 @@ function Shell({ children }: { children: ReactNode }) {
   )
 }
 
-function ProviderButton({ label, mark, onClick }: { label: string; mark: ReactNode; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#EBEBEB] bg-white text-[15px] font-medium hover:bg-[#F7F7F7]",
-        tap,
-      )}
-    >
-      {mark}
-      {label}
-    </button>
-  )
-}
-
 function PreviewCard({ title, meta, status, tone }: { title: string; meta: string; status: string; tone: string }) {
   return (
     <div className="rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
@@ -217,24 +167,3 @@ function PreviewCard({ title, meta, status, tone }: { title: string; meta: strin
   )
 }
 
-function GoogleMark() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-      <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.8H9v3.4h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.6 2.7-3.9 2.7-6.5z" />
-      <path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.6-1.9.9-3.1.9-2.4 0-4.4-1.6-5.1-3.8H.9v2.3A9 9 0 0 0 9 18z" />
-      <path fill="#FBBC05" d="M3.9 10.7A5.4 5.4 0 0 1 3.6 9c0-.6.1-1.2.3-1.7V5H.9A9 9 0 0 0 0 9c0 1.4.3 2.8.9 4l3-2.3z" />
-      <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .9 5l3 2.3C4.6 5.2 6.6 3.6 9 3.6z" />
-    </svg>
-  )
-}
-
-function MicrosoftMark() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-      <path fill="#F25022" d="M1 1h6.5v6.5H1z" />
-      <path fill="#7FBA00" d="M8.5 1H15v6.5H8.5z" />
-      <path fill="#00A4EF" d="M1 8.5h6.5V15H1z" />
-      <path fill="#FFB900" d="M8.5 8.5H15V15H8.5z" />
-    </svg>
-  )
-}

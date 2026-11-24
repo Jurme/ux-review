@@ -15,18 +15,11 @@ Open the local URL printed by Next.js. The dev server uses port **3847**.
 
 ## Sign in
 
-The welcome screen signs you in with Google, Microsoft, or email and password. You arrive as that account. There is no list of people to pick from. Email and password stay available when Google or Microsoft cannot complete.
+The welcome screen signs you in with email and password. A new email creates the account. You arrive as that account. There is no list of people to pick from.
 
 The first person to sign in becomes the admin of an empty workspace. Anyone who signs in after that joins as themselves. Projects and criteria are added in Settings. Reviewers are people who have already signed in.
 
-Google and Microsoft need these redirect URLs in each provider:
-
-- `{origin}/api/auth/callback/google`
-- `{origin}/api/auth/callback/microsoft-entra-id`
-
-Set `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_MICROSOFT_ID`, and `AUTH_MICROSOFT_SECRET`. `AUTH_MICROSOFT_TENANT` is optional; leave it unset to allow any work or personal Microsoft account. Email sign-in does not need those values.
-
-Locally, copy the provider names into `.env.local`. Do not commit that file. The dev server uses an in-memory database when `DATABASE_URL` is unset.
+The dev server uses an in-memory database when `DATABASE_URL` is unset.
 
 ## What you can do
 
@@ -41,4 +34,4 @@ Settings can load a Sunrise Studio sample. You stay signed in as yourself.
 
 ## Stack
 
-Next.js, React, TypeScript, and Tailwind. Interface primitives come from shadcn/ui. Sign-in is Auth.js with Google and Microsoft Entra ID. The workspace is stored in Postgres when the app is published, and in memory during local development.
+Next.js, React, TypeScript, and Tailwind. Interface primitives come from shadcn/ui. Sign-in is email and password through Auth.js. The workspace is stored in Postgres when the app is published, and in memory during local development.
