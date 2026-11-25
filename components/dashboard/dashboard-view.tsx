@@ -1,11 +1,13 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 import { SendDesignLink } from "@/components/reviews/create-review"
+import { ReviewRoleToggle, type ReviewBucket } from "@/components/reviews/role-toggle"
 import { Plus } from "lucide-react"
 import { AvatarStack, PageHeader, pageWrap, ProgressBar } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
-import { assignmentFor, canSeeReview, completionOf, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
+import { assignmentFor, canSeeReview, completionOf, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
 import { formatDay, formatLongDate, greeting, timeAgo } from "@/lib/format"
 import { useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -19,18 +21,22 @@ const STATUS_META: Record<ReviewListStatus, { label: string; dot: string }> = {
 
 export function DashboardView() {
   const { user, users, reviews, feedback, activities, workspace, criteria } = useWorkspace()
+  const [bucket, setBucket] = useState<ReviewBucket>("sent")
   if (!user || !workspace) return null
   const people = new Map(users.map((person) => [person.id, person]))
   const visible = reviews.filter((review) => canSeeReview(user, review) && review.lifecycle !== "draft" && review.lifecycle !== "archived")
-  const needsYou = visible.filter((review) => {
+  const sentCount = visible.filter((review) => reviewBucket(user.id, review) === "sent").length
+  const invitedCount = visible.filter((review) => reviewBucket(user.id, review) === "invited").length
+  const scoped = visible.filter((review) => reviewBucket(user.id, review) === bucket)
+  const needsYou = scoped.filter((review) => {
     const mine = assignmentFor(review, user.id)
     return review.lifecycle === "open" && mine && mine.status !== "completed" && reviewListStatus(review.id, feedback) !== "completed"
   })
-  const coming = visible
+  const coming = scoped
     .filter((review) => reviewListStatus(review.id, feedback) !== "completed")
     .sort((a, b) => b.startDate.localeCompare(a.startDate))
     .slice(0, 4)
-  const counts = Object.fromEntries(STATUS_ORDER.map((status) => [status, visible.filter((review) => reviewListStatus(review.id, feedback) === status).length])) as Record<ReviewListStatus, number>
+  const counts = Object.fromEntries(STATUS_ORDER.map((status) => [status, scoped.filter((review) => reviewListStatus(review.id, feedback) === status).length])) as Record<ReviewListStatus, number>
   const stats = STATUS_ORDER.map((status) => ({ label: STATUS_META[status].label, value: counts[status] }))
   const line =
     needsYou.length === 0
@@ -53,7 +59,11 @@ export function DashboardView() {
         }
       />
 
-      {visible.length === 0 ? (
+      <div className="mt-6">
+        <ReviewRoleToggle value={bucket} onChange={setBucket} sent={sentCount} invited={invitedCount} />
+      </div>
+
+      {scoped.length === 0 && visible.length === 0 ? (
         <section className="mt-8 rounded-2xl border border-[#EBEBEB] p-5">
           <h2 className="text-[16px] font-semibold">Set up this workspace</h2>
           <p className="mt-1 text-[14px] text-[#717171]">
@@ -105,10 +115,10 @@ export function DashboardView() {
               All reviews
             </Link>
           </div>
-          <p className="mt-1 text-[13px] text-[#717171]">Reviews that are still pending or in progress.</p>
+          <p className="mt-1 text-[13px] text-[#717171]">{bucket === "sent" ? "Reviews you sent that are still pending or in progress." : "Reviews you were invited to that are still pending or in progress."}</p>
           <ul className="mt-4 divide-y divide-[#EBEBEB]">
             {coming.length === 0 ? (
-              <li className="py-8 text-[14px] text-[#717171]">Nothing is waiting. Send a design when you have one ready.</li>
+              <li className="py-8 text-[14px] text-[#717171]">{bucket === "sent" ? "Nothing you sent is waiting." : "Nothing you were invited to is waiting."}</li>
             ) : (
               coming.map((review) => {
                 const owner = people.get(review.ownerId)
@@ -170,16 +180,16 @@ export function DashboardView() {
           <section>
             <h2 className="text-[18px] font-semibold tracking-tight">Completion</h2>
             <p className="mt-1 text-[13px] text-[#717171]">
-              {visible.length} review{visible.length === 1 ? "" : "s"}. Pending until someone responds. In progress after the first response. Completed after three.
+              {scoped.length} review{scoped.length === 1 ? "" : "s"}. Pending until someone responds. In progress after the first response. Completed after three.
             </p>
             <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-[#F7F7F7]">
               {STATUS_ORDER.map((status) => {
-                if (!counts[status] || visible.length === 0) return null
+                if (!counts[status] || scoped.length === 0) return null
                 return (
                   <div
                     key={status}
                     className={STATUS_META[status].dot}
-                    style={{ width: `${(counts[status] / visible.length) * 100}%` }}
+                    style={{ width: `${(counts[status] / scoped.length) * 100}%` }}
                   />
                 )
               })}

@@ -32,6 +32,12 @@ export function readyToClose(review: Review) {
   )
 }
 
+export function reviewBucket(userId: string, review: Review): "sent" | "invited" | "other" {
+  if (review.ownerId === userId) return "sent"
+  if (review.reviewers.some((reviewer) => reviewer.userId === userId)) return "invited"
+  return "other"
+}
+
 export function isManager(user: User | null | undefined, review: Review) {
   if (!user) return false
   return user.role === "admin" || user.id === review.ownerId

@@ -7,7 +7,8 @@ import { toast } from "sonner"
 import { EmptyState, PageHeader, pageWrap } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
 import { SendDesignLink } from "@/components/reviews/create-review"
-import { canSeeReview, isManager, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
+import { ReviewRoleToggle, type ReviewBucket } from "@/components/reviews/role-toggle"
+import { canSeeReview, isManager, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
 import { addDays, formatDay, formatMonth, startOfWeek, todayISO, toISODate } from "@/lib/format"
 import { tap } from "@/lib/presentation"
 import { rescheduleReview, useWorkspace } from "@/lib/store"
@@ -36,6 +37,7 @@ export function CalendarBoard() {
   const [view, setView] = useState<View>("week")
   const [project, setProject] = useState("all")
   const [status, setStatus] = useState<ReviewListStatus | "all">("all")
+  const [bucket, setBucket] = useState<ReviewBucket>("sent")
   const [dragging, setDragging] = useState<string | null>(null)
   const [dropDate, setDropDate] = useState<string | null>(null)
 
@@ -45,13 +47,14 @@ export function CalendarBoard() {
   const today = todayISO()
   const projects = [...workspace.projects].sort((a, b) => a.localeCompare(b))
 
-  const visible = reviews.filter((review) => {
+  const matched = reviews.filter((review) => {
     if (!canSeeReview(user, review)) return false
     if (review.lifecycle === "draft" || review.lifecycle === "archived") return false
     if (project !== "all" && review.project !== project) return false
     if (status !== "all" && reviewListStatus(review.id, feedback) !== status) return false
     return true
   })
+  const visible = matched.filter((review) => reviewBucket(user.id, review) === bucket)
 
   function shift(direction: number) {
     const next = new Date(focus)
@@ -120,6 +123,12 @@ export function CalendarBoard() {
         <button type="button" className={cn(buttonVariants({ variant: "outline", size: "icon" }), "rounded-xl")} onClick={() => shift(1)} aria-label="Next">
           <ChevronRight />
         </button>
+        <ReviewRoleToggle
+          value={bucket}
+          onChange={setBucket}
+          sent={matched.filter((review) => reviewBucket(user.id, review) === "sent").length}
+          invited={matched.filter((review) => reviewBucket(user.id, review) === "invited").length}
+        />
         <Filter label="Project" value={project} onChange={setProject} options={projects.map((item) => ({ value: item, label: item }))} />
         <Filter
           label="Status"
@@ -158,7 +167,7 @@ export function CalendarBoard() {
         )}
         {visible.length === 0 ? (
           <div className="mt-4">
-            <EmptyState title="Nothing due in this view" body={project !== "all" || status !== "all" ? "No sent reviews match these filters." : "Send a design and it will sit on the day it is due."} />
+            <EmptyState title="Nothing due in this view" body={bucket === "sent" ? "Nothing you sent is due in this view." : "Nothing you were invited to is due in this view."} />
           </div>
         ) : null}
       </div>

@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { SendDesignLink } from "@/components/reviews/create-review"
+import { ReviewRoleToggle, type ReviewBucket } from "@/components/reviews/role-toggle"
 import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react"
 import { AvatarStack, PageHeader, PhasePill, pageWrap, ProgressBar } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { canSeeReview, completionOf, phaseOf, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
+import { canSeeReview, completionOf, phaseOf, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
 import { addDaysISO, formatDay, formatWeekday, parseISODate, todayISO, windowLabel } from "@/lib/format"
 import { PHASE_META, PHASE_ORDER, tap } from "@/lib/presentation"
 import { useWorkspace } from "@/lib/store"
@@ -26,6 +27,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
   const [phase, setPhase] = useState<Phase | "all">("all")
   const [listStatus, setListStatus] = useState<ReviewListStatus | "all">("all")
   const [project, setProject] = useState("all")
+  const [bucket, setBucket] = useState<ReviewBucket>("sent")
   const [day, setDay] = useState<string | null>(null)
   const [today, setToday] = useState<string | null>(null)
   const [allDays, setAllDays] = useState(false)
@@ -53,9 +55,9 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
     })
     .sort((a, b) => a.deadline.localeCompare(b.deadline) || a.title.localeCompare(b.title))
 
-  const sent = filtered.filter((review) => review.ownerId === user.id)
-  const invited = filtered.filter((review) => review.ownerId !== user.id && review.reviewers.some((item) => item.userId === user.id))
-  const other = filtered.filter((review) => review.ownerId !== user.id && !review.reviewers.some((item) => item.userId === user.id))
+  const sent = filtered.filter((review) => reviewBucket(user.id, review) === "sent")
+  const invited = filtered.filter((review) => reviewBucket(user.id, review) === "invited")
+  const shown = bucket === "sent" ? sent : invited
   const phases = PHASE_ORDER.filter((item) => item === "completed" || item === "archived")
   const narrowed = Boolean(project !== "all" || (archive ? phase !== "all" || query : listStatus !== "all" || !allDays))
   const dayLabel = !day || !today || day === today ? (day ? `Today, ${formatDay(day)}` : "Today") : formatWeekday(parseISODate(day))
@@ -68,7 +70,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
         description={
           archive
             ? "Closed and archived reviews stay here with their criteria, reviewers, and notes."
-            : "Opens on reviews due today. Sent is a design you asked others to review. Invited is a design someone asked you to review."
+            : "Opens on reviews due today. Switch between designs you sent and designs you were invited to review."
         }
         action={
           archive ? undefined : (
@@ -80,8 +82,12 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
         }
       />
 
+      <div className="mt-6">
+        <ReviewRoleToggle value={bucket} onChange={setBucket} sent={sent.length} invited={invited.length} />
+      </div>
+
       {archive ? (
-        <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative max-w-md flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#717171]" />
             <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reviews" className="pl-9" aria-label="Search reviews" />
@@ -89,7 +95,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
           <Filter label="Project" value={project} onChange={setProject} options={projects.map((item) => ({ value: item, label: item }))} />
         </div>
       ) : (
-        <div className="mt-6 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
             className={cn(buttonVariants({ variant: "outline" }), "h-10 rounded-xl", showingToday && "border-[#222]")}
@@ -162,52 +168,24 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
         </div>
       )}
 
-      <div className="mt-8 space-y-10">
-        <ReviewGroup
-          title="Sent for review"
-          body="Designs you sent to other people."
-          reviews={sent}
-          people={people}
-          archive={archive}
-          feedback={feedback}
-          empty={waitingForDay ? "" : sentEmpty(archive, narrowed, showingToday, allDays)}
-        />
-        <ReviewGroup
-          title="Invited to review"
-          body="Designs other people asked you to review."
-          reviews={invited}
-          people={people}
-          archive={archive}
-          feedback={feedback}
-          empty={waitingForDay ? "" : invitedEmpty(archive, narrowed, showingToday, allDays)}
-        />
-        {other.length > 0 ? (
-          <ReviewGroup
-            title="Other reviews"
-            body="Designs in the workspace that you did not send and were not invited to."
-            reviews={other}
-            people={people}
-            archive={archive}
-            feedback={feedback}
-            empty=""
-          />
-        ) : null}
-      </div>
+      <ReviewGroup
+        reviews={shown}
+        people={people}
+        archive={archive}
+        feedback={feedback}
+        empty={waitingForDay ? "" : bucket === "sent" ? sentEmpty(archive, narrowed, showingToday, allDays) : invitedEmpty(archive, narrowed, showingToday, allDays)}
+      />
     </div>
   )
 }
 
 function ReviewGroup({
-  title,
-  body,
   reviews,
   people,
   archive,
   feedback,
   empty,
 }: {
-  title: string
-  body: string
   reviews: Review[]
   people: Map<string, User>
   archive: boolean
@@ -215,12 +193,7 @@ function ReviewGroup({
   empty: string
 }) {
   return (
-    <section>
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[18px] font-semibold tracking-tight">{title}</h2>
-        <span className="text-[13px] text-[#717171]">{reviews.length}</span>
-      </div>
-      <p className="mt-1 text-[13px] text-[#717171]">{body}</p>
+    <section className="mt-4">
       {reviews.length === 0 ? (
         <p className="mt-4 text-[14px] text-[#717171]">{empty}</p>
       ) : (
