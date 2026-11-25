@@ -1,16 +1,53 @@
 "use client"
 
-import { signIn, signOut } from "next-auth/react"
+import { signOut } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, type ReactNode } from "react"
 import { toast } from "sonner"
-import { Boot, Mark } from "@/components/common"
+import { Mark } from "@/components/common"
 import { refreshWorkspace, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { tap } from "@/lib/presentation"
 
+let csrfPromise: Promise<string> | null = null
+
+function csrfToken() {
+  csrfPromise ??= fetch("/api/auth/csrf", { headers: { accept: "application/json" } })
+    .then(async (response) => {
+      const body = (await response.json().catch(() => null)) as { csrfToken?: string } | null
+      if (!response.ok || !body?.csrfToken) throw new Error("csrf")
+      return body.csrfToken
+    })
+    .catch((error: unknown) => {
+      csrfPromise = null
+      throw error
+    })
+  return csrfPromise
+}
+
+async function postCredentials(email: string, password: string, token: string) {
+  const response = await fetch("/api/auth/callback/credentials", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      "x-auth-return-redirect": "1",
+    },
+    body: new URLSearchParams({
+      email,
+      password,
+      csrfToken: token,
+      callbackUrl: "/dashboard",
+    }),
+  })
+  const body = (await response.json().catch(() => null)) as { url?: string } | null
+  const target = body?.url ? new URL(body.url, window.location.origin) : null
+  const code = target?.searchParams.get("code") || target?.searchParams.get("error") || ""
+  if (!response.ok || !target || code) return code || "failed"
+  return "ok" as const
+}
+
 export function LoginScreen() {
-  const { ready, user, gate, inviteEmail } = useWorkspace()
+  const { gate, inviteEmail } = useWorkspace()
   const router = useRouter()
   const params = useSearchParams()
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in")
@@ -21,28 +58,26 @@ export function LoginScreen() {
   const [notice, setNotice] = useState("")
 
   useEffect(() => {
-    if (ready && user) router.replace("/dashboard")
-  }, [ready, user, router])
-
-  if (ready && user) return <Boot label="Opening workspace" />
+    void csrfToken().catch(() => undefined)
+  }, [])
 
   const error = params.get("error")
 
   async function finishSignIn() {
-    let result
     try {
-      result = await signIn("credentials", { email, password, redirect: false, redirectTo: "/dashboard" })
+      const token = await csrfToken()
+      csrfPromise = null
+      const outcome = await postCredentials(email, password, token)
+      if (outcome !== "ok") {
+        void csrfToken().catch(() => undefined)
+        return outcome
+      }
     } catch {
+      csrfPromise = null
       return "failed" as const
     }
-    if (!result || result.error || result.ok === false) {
-      if (result?.code === "no_account") return "no_account" as const
-      if (result?.code === "wrong_password") return "wrong_password" as const
-      return "failed" as const
-    }
-    await refreshWorkspace()
-    router.push("/dashboard")
-    router.refresh()
+    void refreshWorkspace()
+    router.replace("/dashboard")
     return "ok" as const
   }
 

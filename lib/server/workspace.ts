@@ -69,6 +69,7 @@ const actions = {
   saveReview: mutations.saveReview,
   publishReview: mutations.publishReview,
   deleteDraft: mutations.deleteDraft,
+  deleteReview: mutations.deleteReview,
   rescheduleReview: mutations.rescheduleReview,
   setLifecycle: mutations.setLifecycle,
   remindReviewer: mutations.remindReviewer,

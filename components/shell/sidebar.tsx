@@ -31,7 +31,7 @@ const items = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/reviews", label: "All reviews", icon: FolderOpen },
-  { href: "/archive", label: "Archived reviews", icon: Archive },
+  { href: "/archive", label: "Archive", icon: Archive },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 

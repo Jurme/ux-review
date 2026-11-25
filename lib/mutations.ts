@@ -248,6 +248,22 @@ export function publishReview(state: AppState, id: string): Mutation {
   return saveReview(state, reviewToDraft(review), "publish", id)
 }
 
+export function deleteReview(state: AppState, id: string): Mutation {
+  const user = actor(state)
+  const review = state.reviews.find((item) => item.id === id)
+  if (!user || !review) return same(state, "That review is no longer here.")
+  if (review.lifecycle !== "archived") return same(state, "Archive a review before deleting it.")
+  return done(
+    {
+      ...state,
+      reviews: state.reviews.filter((item) => item.id !== id),
+      feedback: state.feedback.filter((item) => item.reviewId !== id),
+      notifications: state.notifications.filter((item) => item.reviewId !== id),
+    },
+    "Review deleted.",
+  )
+}
+
 export function deleteDraft(state: AppState, id: string): Mutation {
   const user = actor(state)
   const review = state.reviews.find((item) => item.id === id)

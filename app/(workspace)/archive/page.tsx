@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
-import { ReviewsList } from "@/components/reviews/reviews-list"
+import { ArchiveList } from "@/components/reviews/archive-list"
 
-export const metadata: Metadata = { title: "Archived reviews" }
+export const metadata: Metadata = { title: "Archive" }
 
 export default function ArchivePage() {
-  return <ReviewsList archive />
+  return <ArchiveList />
 }

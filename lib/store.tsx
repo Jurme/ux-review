@@ -13,6 +13,8 @@ const LOADING: Snap = { gate: "loading" }
 let snap: Snap = LOADING
 let revision = 0
 let started = false
+let requestSeq = 0
+let inflight: AbortController | null = null
 let queue: Promise<void> = Promise.resolve()
 const listeners = new Set<() => void>()
 
@@ -27,13 +29,22 @@ export function readWorkspace() {
 }
 
 export async function refreshWorkspace(options?: { quiet?: boolean }) {
+  inflight?.abort()
+  const controller = new AbortController()
+  inflight = controller
+  const seq = ++requestSeq
   try {
-    const response = await fetch("/api/workspace", { cache: "no-store", signal: AbortSignal.timeout(8000) })
+    const response = await fetch("/api/workspace", {
+      cache: "no-store",
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
+    })
+    if (seq !== requestSeq) return
     if (response.status === 401) {
       publish({ gate: "signed_out" })
       return
     }
     const body = (await response.json().catch(() => null)) as { state?: AppState; revision?: number; email?: string } | null
+    if (seq !== requestSeq) return
     if (response.status === 403) {
       publish({ gate: "invite", email: body?.email ?? "" })
       return
@@ -45,6 +56,7 @@ export async function refreshWorkspace(options?: { quiet?: boolean }) {
     if (snap.gate === "ready" && body.revision <= revision) return
     publish({ gate: "ready", state: body.state, revision: body.revision })
   } catch {
+    if (seq !== requestSeq || controller.signal.aborted) return
     if (!options?.quiet) publish({ gate: "signed_out" })
   }
 }
@@ -57,7 +69,7 @@ function syncIfReady() {
 function bootstrap() {
   if (started || typeof window === "undefined") return
   started = true
-  void refreshWorkspace()
+  if (window.location.pathname !== "/login") void refreshWorkspace()
   window.setInterval(syncIfReady, 4000)
   document.addEventListener("visibilitychange", syncIfReady)
   window.addEventListener("focus", syncIfReady)
@@ -160,6 +172,10 @@ export function publishReview(id: string) {
 
 export function deleteDraft(id: string) {
   return run("deleteDraft", [id])
+}
+
+export function deleteReview(id: string) {
+  return run("deleteReview", [id])
 }
 
 export function rescheduleReview(id: string, startDate: string) {
