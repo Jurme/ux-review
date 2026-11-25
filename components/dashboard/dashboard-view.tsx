@@ -8,7 +8,7 @@ import { Plus } from "lucide-react"
 import { PageHeader, pageWrap } from "@/components/common"
 import { ReviewSummary } from "@/components/reviews/review-summary"
 import { buttonVariants } from "@/components/ui/button"
-import { assignmentFor, canSeeReview, completionOf, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
+import { canSeeReview, completionOf, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
 import { formatDay, formatLongDate, greeting, timeAgo } from "@/lib/format"
 import { useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -29,29 +29,18 @@ export function DashboardView() {
   const sentCount = visible.filter((review) => reviewBucket(user.id, review) === "sent").length
   const invitedCount = visible.filter((review) => reviewBucket(user.id, review) === "invited").length
   const scoped = visible.filter((review) => reviewBucket(user.id, review) === bucket)
-  const needsYou = scoped.filter((review) => {
-    const mine = assignmentFor(review, user.id)
-    return review.lifecycle === "open" && review.ownerId !== user.id && mine && mine.status !== "completed" && reviewListStatus(review.id, feedback, review.ownerId) !== "completed"
-  })
   const coming = scoped
     .filter((review) => reviewListStatus(review.id, feedback, review.ownerId) !== "completed")
     .sort((a, b) => b.startDate.localeCompare(a.startDate))
     .slice(0, 4)
   const counts = Object.fromEntries(STATUS_ORDER.map((status) => [status, scoped.filter((review) => reviewListStatus(review.id, feedback, review.ownerId) === status).length])) as Record<ReviewListStatus, number>
   const stats = STATUS_ORDER.map((status) => ({ label: STATUS_META[status].label, value: counts[status] }))
-  const line =
-    needsYou.length === 0
-      ? "Nothing is waiting on your feedback."
-      : needsYou.length === 1
-        ? `You have one review waiting: ${needsYou[0].title}.`
-        : `You have ${needsYou.length} reviews waiting on your feedback.`
 
   return (
     <div className={pageWrap()}>
       <PageHeader
         eyebrow={`${workspace.name} · ${formatLongDate(new Date())}`}
         title={greeting(user.name)}
-        description={line}
         action={
           <SendDesignLink className={cn(buttonVariants({ size: "lg" }))}>
             <Plus />
