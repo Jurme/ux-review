@@ -26,7 +26,6 @@ const STATUSES: Exclude<FeedbackStatus, "draft">[] = ["open", "acknowledged", "r
 export function ReviewWorkspace({ id }: { id: string }) {
   const router = useRouter()
   const { user, users, reviews, criteria, feedback } = useWorkspace()
-  const [linkIndex, setLinkIndex] = useState(0)
   const review = reviews.find((item) => item.id === id)
   if (!user || !review) {
     return (
@@ -43,8 +42,6 @@ export function ReviewWorkspace({ id }: { id: string }) {
   const activeCriteria = criteria.filter((item) => item.active).sort((a, b) => a.order - b.order)
   const percent = completionOf(review)
   const links = [review.figmaUrl, ...review.referenceUrls].filter(Boolean)
-  const activeLink = links[Math.min(linkIndex, Math.max(links.length - 1, 0))] ?? ""
-  const embed = activeLink ? `https://www.figma.com/embed?embed_host=ux-review&url=${encodeURIComponent(activeLink)}` : ""
 
   async function act(result: Promise<{ ok: boolean; message?: string }>) {
     const settled = await result
@@ -93,34 +90,20 @@ export function ReviewWorkspace({ id }: { id: string }) {
         </div>
       </div>
 
-      <section className="mt-6 overflow-hidden rounded-[16px] border border-[var(--border)]">
-        {links.length > 1 ? (
-          <div className="flex gap-2 overflow-x-auto border-b border-[var(--border)] px-3 py-2">
-            {links.map((link, index) => (
-              <button
-                key={`${link}-${index}`}
-                type="button"
-                className={cn("h-8 shrink-0 rounded-full px-3 text-[13px] font-medium", tap, index === Math.min(linkIndex, links.length - 1) ? "bg-[#222] text-white" : "bg-[#F7F7F7] text-[#222]")}
-                onClick={() => setLinkIndex(index)}
-              >
-                Design {index + 1}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {embed ? (
-          <iframe title="Figma design" src={embed} className="h-[420px] w-full bg-[#F7F7F7]" />
-        ) : (
-          <div className="grid h-[180px] place-items-center text-[14px] text-[#717171]">No Figma link yet.</div>
-        )}
-        {activeLink ? (
-          <div className="flex justify-end border-t border-[var(--border)] px-4 py-2">
-            <a href={activeLink} target="_blank" rel="noreferrer" className={cn("inline-flex items-center gap-1 text-[13px] font-semibold", tap)}>
-              Open in Figma <ExternalLink className="size-3.5" />
-            </a>
-          </div>
-        ) : null}
-      </section>
+      {links.length === 0 ? (
+        <p className="mt-6 text-[14px] text-[#717171]">No Figma link yet.</p>
+      ) : (
+        <ul className="mt-6 flex flex-col gap-2">
+          {links.map((link, index) => (
+            <li key={`${link}-${index}`}>
+              <a href={link} target="_blank" rel="noreferrer" className={cn("inline-flex items-center gap-1 text-[14px] font-semibold", tap)}>
+                {links.length > 1 ? `Open design ${index + 1} in Figma` : "Open in Figma"}
+                <ExternalLink className="size-3.5" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {review.description ? <p className="mt-5 text-[15px] leading-6">{review.description}</p> : null}
 
