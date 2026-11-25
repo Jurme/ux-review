@@ -96,7 +96,7 @@ export function DashboardView() {
             </Link>
           </div>
           <p className="mt-1 text-[13px] text-[#717171]">{bucket === "sent" ? "Reviews you sent that are still pending or in progress." : "Reviews you were invited to that are still pending or in progress."}</p>
-          <ul className="mt-4 space-y-3">
+          <ul className="mt-3 space-y-2">
             {coming.length === 0 ? (
               <li className="py-8 text-[14px] text-[#717171]">{bucket === "sent" ? "Nothing you sent is waiting." : "Nothing you were invited to is waiting."}</li>
             ) : (

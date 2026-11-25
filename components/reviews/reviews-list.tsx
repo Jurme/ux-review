@@ -2,10 +2,11 @@
 
 import { SendDesignLink } from "@/components/reviews/create-review"
 import { ReviewRoleToggle, type ReviewBucket } from "@/components/reviews/role-toggle"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
-import { PageHeader, pageWrap } from "@/components/common"
-import { ReviewSummary } from "@/components/reviews/review-summary"
+import { AvatarStack, PageHeader, pageWrap } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
 import { canSeeReview, completionOf, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
 import { addDaysISO, dateInTimeZone, formatDay, formatWeekday, parseISODate } from "@/lib/format"
@@ -128,15 +129,6 @@ export function ReviewsList() {
           />
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3">
-          {(Object.keys(LIST_STATUS) as ReviewListStatus[]).map((item) => (
-            <span key={item} className="inline-flex items-center gap-1.5 text-[12px] text-[#717171]">
-              <span className={cn("size-2 rounded-full", LIST_STATUS[item].dot)} />
-              {LIST_STATUS[item].label}
-          </span>
-        ))}
-      </div>
-
       <ReviewGroup
         reviews={shown}
         people={people}
@@ -158,34 +150,73 @@ function ReviewGroup({
   feedback: Feedback[]
   empty: string
 }) {
+  const router = useRouter()
   return (
     <section className="mt-4">
       {reviews.length === 0 ? (
         <p className="mt-4 text-[14px] text-[#717171]">{empty}</p>
       ) : (
-        <ul className="mt-2 space-y-3">
-          {reviews.map((review) => {
-            const owner = people.get(review.ownerId)
-            const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
-            const done = review.reviewers.filter((item) => item.status === "completed").length
-            return (
-              <li key={review.id}>
-                <ReviewSummary
-                  href={`/reviews/${review.id}`}
-                  title={review.title}
-                  project={review.project}
-                  sent={formatDay(review.startDate)}
-                  done={done}
-                  total={review.reviewers.length}
-                  progress={completionOf(review)}
-                  owner={owner?.name || "Unknown"}
-                  users={reviewers}
-                  status={reviewListStatus(review.id, feedback, review.ownerId)}
-                />
-              </li>
-            )
-          })}
-        </ul>
+        <div className="overflow-x-auto rounded-xl border border-[#EBEBEB] bg-white">
+          <table className="w-full min-w-[860px] border-collapse text-left text-[13px]">
+            <thead className="bg-[#F7F7F7] text-[12px] text-[#717171]">
+              <tr>
+                <th className="px-4 py-2.5 font-medium">Design</th>
+                <th className="px-3 py-2.5 font-medium">Project</th>
+                <th className="px-3 py-2.5 font-medium">Sent</th>
+                <th className="px-3 py-2.5 font-medium">Due</th>
+                <th className="px-3 py-2.5 font-medium">Status</th>
+                <th className="px-3 py-2.5 font-medium">Progress</th>
+                <th className="px-3 py-2.5 font-medium">Requested by</th>
+                <th className="px-4 py-2.5 font-medium">Reviewers</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reviews.map((review) => {
+                const owner = people.get(review.ownerId)
+                const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
+                const done = review.reviewers.filter((item) => item.status === "completed").length
+                const progress = completionOf(review)
+                const status = reviewListStatus(review.id, feedback, review.ownerId)
+                const meta = LIST_STATUS[status]
+                return (
+                  <tr
+                    key={review.id}
+                    className="cursor-pointer border-t border-[#EBEBEB] transition-colors duration-150 hover:bg-[var(--hover)]"
+                    onClick={() => router.push(`/reviews/${review.id}`)}
+                  >
+                    <td className="px-4 py-2.5">
+                      <Link href={`/reviews/${review.id}`} className="font-medium text-[#222]" onClick={(event) => event.stopPropagation()}>
+                        {review.title}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2.5 text-[#717171]">{review.project || "—"}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap text-[#717171]">{formatDay(review.startDate)}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap text-[#222]">{formatDay(review.deadline)}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium", meta.chip)}>
+                        <span className={cn("size-1.5 rounded-full", meta.dot)} />
+                        {meta.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className="flex items-center gap-2">
+                        <span className="review-track block h-1 w-16 overflow-hidden rounded-full" role="meter" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label={`${progress}% complete`}>
+                          <span className="review-fill block h-full rounded-full" style={{ width: `${progress}%` }} />
+                        </span>
+                        <span className="text-[12px] text-[#717171] tabular-nums">{review.reviewers.length === 0 ? "—" : `${done}/${review.reviewers.length}`}</span>
+                        <span className="w-8 text-[12px] font-medium text-[#222] tabular-nums">{progress}%</span>
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-[#222]">{owner?.name || "Unknown"}</td>
+                    <td className="px-4 py-2.5">
+                      <AvatarStack users={reviewers} size={22} />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   )
