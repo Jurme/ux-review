@@ -4,7 +4,7 @@ import { signOut } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, type ReactNode } from "react"
 import { toast } from "sonner"
-import { Mark } from "@/components/common"
+import { Mark, Spinner } from "@/components/common"
 import { refreshWorkspace, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { tap } from "@/lib/presentation"
@@ -190,8 +190,9 @@ export function LoginScreen() {
         <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" autoComplete="email" aria-label="Email" />
         <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete={mode === "sign-up" ? "new-password" : "current-password"} aria-label="Password" minLength={8} />
         {mode === "sign-up" ? <p className="text-[13px] text-[#717171]">Use at least 8 characters.</p> : null}
-        <button type="submit" className={cn("btn btn-primary w-full", tap)} disabled={pending}>
-          {pending ? "Please wait…" : mode === "sign-in" ? "Sign in" : "Create account"}
+        <button type="submit" className={cn("btn btn-primary inline-flex w-full items-center justify-center gap-2", tap)} disabled={pending}>
+          {pending ? <Spinner className="size-4" /> : null}
+          {pending ? (mode === "sign-in" ? "Signing in…" : "Creating account…") : mode === "sign-in" ? "Sign in" : "Create account"}
         </button>
       </form>
       <p className="mt-4 text-[13px] text-[#717171]">

@@ -1,21 +1,22 @@
 "use client"
 
-import { useEffect, type ReactNode } from "react"
-import { SessionProvider } from "next-auth/react"
+import { Suspense, useEffect, type ReactNode } from "react"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { RouteProgress } from "@/components/shell/route-progress"
 import { appearanceOf } from "@/lib/domain"
 import { useWorkspace } from "@/lib/store"
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <SessionProvider refetchOnWindowFocus={false}>
-      <TooltipProvider delay={400}>
-        <ThemeSync />
-        {children}
-        <ThemedToaster />
-      </TooltipProvider>
-    </SessionProvider>
+    <TooltipProvider delay={400}>
+      <ThemeSync />
+      <Suspense fallback={null}>
+        <RouteProgress />
+      </Suspense>
+      {children}
+      <ThemedToaster />
+    </TooltipProvider>
   )
 }
 

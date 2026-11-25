@@ -20,6 +20,18 @@ export async function currentProfile(): Promise<Profile | null> {
   }
 }
 
+export async function peekRevision() {
+  const rows = await sql<{ revision: number | string }>("select revision from workspace_state where id = $1", [ID])
+  return rows[0] ? Number(rows[0].revision) : null
+}
+
+function slimState(state: AppState) {
+  const activities = state.activities.length > 40 ? state.activities.slice(0, 40) : state.activities
+  const notifications = state.notifications.length > 40 ? state.notifications.slice(0, 40) : state.notifications
+  if (activities === state.activities && notifications === state.notifications) return null
+  return { ...state, activities, notifications }
+}
+
 async function readRow() {
   const rows = await sql<Row>("select document, revision from workspace_state where id = $1", [ID])
   const row = rows[0]
@@ -56,13 +68,15 @@ export async function openWorkspace(profile: Profile, attempt = 0) {
   }
   const bound = bindSession(row.state, profile)
   if (!bound.ok) return { ok: false as const, error: "invite_required" as const, email: profile.email }
-  if (!bound.activate) return { ok: true as const, state: bound.state, revision: row.revision }
-  const revision = await updateRow(bound.state, row.revision)
+  const slimmed = slimState(bound.state)
+  const next = slimmed ?? bound.state
+  if (!bound.activate && !slimmed) return { ok: true as const, state: next, revision: row.revision }
+  const revision = await updateRow(next, row.revision)
   if (!revision) {
     if (attempt > 2) return { ok: false as const, error: "unavailable" as const }
     return openWorkspace(profile, attempt + 1)
   }
-  return { ok: true as const, state: bound.state, revision }
+  return { ok: true as const, state: next, revision }
 }
 
 const actions = {
@@ -124,8 +138,8 @@ export async function mutateWorkspace(profile: Profile, action: ActionName, args
     }
     nextArgs = [{ name: account.name, email: account.email }]
   }
-  const run = actions[action] as (state: AppState, ...rest: unknown[]) => Mutation
-  const result = run(opened.state, ...nextArgs)
+  const run = actions[action] as (state: AppState, ...rest: unknown[]) => Mutation | Promise<Mutation>
+  const result = await run(opened.state, ...nextArgs)
   if (!result.ok) return { ok: false as const, error: "rejected" as const, message: result.message, state: opened.state, revision: opened.revision }
   const revision = await updateRow(result.state, opened.revision)
   if (!revision) return { ok: false as const, error: "conflict" as const }

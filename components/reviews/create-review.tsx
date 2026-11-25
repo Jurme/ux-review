@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Plus, X } from "lucide-react"
 import { toast } from "sonner"
-import { Avatar } from "@/components/common"
+import { Avatar, Spinner } from "@/components/common"
 import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/constants"
 import { dateInTimeZone } from "@/lib/format"
 import { tap } from "@/lib/presentation"
@@ -43,6 +43,7 @@ function SendForm() {
   const [note, setNote] = useState("")
   const [reviewerIds, setReviewerIds] = useState<string[] | null>(null)
   const [query, setQuery] = useState("")
+  const [sending, setSending] = useState(false)
   const [reminder, setReminder] = useState(() => {
     const current = String(workspace?.reminderHours ?? "")
     return REMINDER_OPTIONS.some((item) => item.value === current) ? Number(current) : DEFAULT_REMINDER_MINUTES
@@ -82,6 +83,9 @@ function SendForm() {
   }
 
   async function submit() {
+    if (sending) return
+    setSending(true)
+    try {
     let ids = selectedIds
     if (reviewerIds === null) {
       await refreshWorkspace({ quiet: true })
@@ -127,6 +131,9 @@ function SendForm() {
     setReviewerIds(null)
     if (result.id) router.push(`/reviews/${result.id}`)
     else router.push("/reviews")
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
@@ -242,7 +249,10 @@ function SendForm() {
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button type="button" className={cn("btn", tap)} onClick={() => router.back()}>Cancel</button>
-          <button type="button" className={cn("btn btn-primary", tap)} onClick={() => submit()}>Send to reviewers</button>
+          <button type="button" className={cn("btn btn-primary inline-flex items-center gap-2", tap)} disabled={sending} onClick={() => void submit()}>
+            {sending ? <Spinner /> : null}
+            {sending ? "Sending…" : "Send to reviewers"}
+          </button>
         </div>
       </form>
     </div>

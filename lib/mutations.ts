@@ -6,7 +6,6 @@ import {
   validateFeedback,
   validateReview,
 } from "@/lib/domain"
-import { createSeed } from "@/lib/seed"
 import { addDaysISO, clip, dateInTimeZone, diffDays, formatDay, isEmail, normalizeHttpUrl, timeInTimeZone, uid } from "@/lib/format"
 import type {
   Activity,
@@ -54,7 +53,7 @@ function withActivity(
     actorId: state.currentUserId,
     createdAt: stamp(),
   }
-  return { ...state, activities: [activity, ...state.activities].slice(0, 200) }
+  return { ...state, activities: [activity, ...state.activities].slice(0, 40) }
 }
 
 function withNotes(
@@ -79,7 +78,7 @@ function withNotes(
       createdAt,
     })
   }
-  return { ...state, notifications: [...additions, ...state.notifications].slice(0, 120) }
+  return { ...state, notifications: [...additions, ...state.notifications].slice(0, 40) }
 }
 
 function replaceReview(state: AppState, review: Review) {
@@ -767,9 +766,10 @@ export function markRead(state: AppState, id: string): Mutation {
   })
 }
 
-export function loadSample(state: AppState): Mutation {
+export async function loadSample(state: AppState): Promise<Mutation> {
   const me = actor(state)
   if (!me) return same(state, "Sign in first.")
+  const { createSeed } = await import("@/lib/seed")
   const fresh = createSeed()
   const swap = (id: string) => (id === "user_tashi" ? me.id : id)
   const users = [

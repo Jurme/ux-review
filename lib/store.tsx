@@ -15,8 +15,10 @@ let revision = 0
 let started = false
 let requestSeq = 0
 let inflight: AbortController | null = null
+let busy = 0
 let queue: Promise<void> = Promise.resolve()
 const listeners = new Set<() => void>()
+const busyListeners = new Set<() => void>()
 
 function publish(next: Snap) {
   snap = next
@@ -28,17 +30,37 @@ export function readWorkspace() {
   return snap.gate === "ready" ? snap.state : null
 }
 
+function setBusy(delta: number) {
+  busy = Math.max(0, busy + delta)
+  busyListeners.forEach((listener) => listener())
+}
+
+export function useBusy() {
+  return useSyncExternalStore(
+    (listener) => {
+      busyListeners.add(listener)
+      return () => busyListeners.delete(listener)
+    },
+    () => busy > 0,
+    () => false,
+  )
+}
+
 export async function refreshWorkspace(options?: { quiet?: boolean }) {
   inflight?.abort()
   const controller = new AbortController()
   inflight = controller
   const seq = ++requestSeq
   try {
+    const headers: HeadersInit = {}
+    if (snap.gate === "ready" && revision > 0) headers["x-workspace-revision"] = String(revision)
     const response = await fetch("/api/workspace", {
       cache: "no-store",
+      headers,
       signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]),
     })
     if (seq !== requestSeq) return
+    if (response.status === 204) return
     if (response.status === 401) {
       publish({ gate: "signed_out" })
       return
@@ -70,7 +92,7 @@ function bootstrap() {
   if (started || typeof window === "undefined") return
   started = true
   if (window.location.pathname !== "/login") void refreshWorkspace()
-  window.setInterval(syncIfReady, 4000)
+  window.setInterval(syncIfReady, 8000)
   document.addEventListener("visibilitychange", syncIfReady)
   window.addEventListener("focus", syncIfReady)
 }
@@ -157,7 +179,8 @@ function fallbackState(): AppState {
 
 function run(action: string, args: unknown[]): Promise<Mutation> {
   if (snap.gate !== "ready") return Promise.resolve({ state: fallbackState(), ok: false, message: "The workspace is still opening." })
-  const job = queue.then(() => send(action, args, true))
+  setBusy(1)
+  const job = queue.then(() => send(action, args, true)).finally(() => setBusy(-1))
   queue = job.then(() => undefined, () => undefined)
   return job
 }

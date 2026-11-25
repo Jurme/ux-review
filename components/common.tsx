@@ -258,13 +258,49 @@ export function pageWrap(className?: string) {
   return cn("mx-auto w-full max-w-[1180px] px-5 py-8 md:px-10 md:py-10", className)
 }
 
+export function Bone({ className }: { className?: string }) {
+  return <div className={cn("animate-pulse rounded-md bg-[var(--border)]", className)} />
+}
+
+export function Spinner({ className }: { className?: string }) {
+  return <span className={cn("inline-block size-4 animate-spin rounded-full border-2 border-current/30 border-t-current", className)} aria-hidden />
+}
+
 export function Boot({ label = "Opening workspace" }: { label?: string }) {
   return (
-    <div className="flex h-dvh bg-white">
-      <div className="hidden w-[248px] border-r border-[#EBEBEB] md:block" />
-      <div className="flex flex-1 items-center justify-center gap-3 text-[15px] text-[#717171]">
-        <Mark />
-        {label}
+    <div className="flex h-dvh gap-3 bg-[var(--canvas)] p-3" role="status" aria-live="polite">
+      <aside className="hidden w-[232px] shrink-0 flex-col gap-3 py-4 md:flex">
+        <div className="flex items-center gap-2 px-3">
+          <Mark className="size-8" />
+          <Bone className="h-4 w-24" />
+        </div>
+        <div className="mt-4 space-y-2 px-3">
+          <Bone className="h-9 w-full rounded-xl" />
+          <Bone className="h-9 w-full rounded-xl" />
+          <Bone className="h-9 w-4/5 rounded-xl" />
+          <Bone className="h-9 w-full rounded-xl" />
+        </div>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--background)]">
+        <div className="flex items-center gap-2 border-b border-[var(--border)] px-5 py-4 text-[14px] text-[#717171]">
+          <Spinner />
+          {label}
+        </div>
+        <div className="mx-auto w-full max-w-[1180px] px-5 py-8 md:px-10">
+          <Bone className="h-4 w-28" />
+          <Bone className="mt-4 h-9 w-64" />
+          <Bone className="mt-3 h-4 w-80 max-w-full" />
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            <Bone className="h-24 rounded-2xl" />
+            <Bone className="h-24 rounded-2xl" />
+            <Bone className="h-24 rounded-2xl" />
+          </div>
+          <div className="mt-8 space-y-3">
+            <Bone className="h-16 rounded-2xl" />
+            <Bone className="h-16 rounded-2xl" />
+            <Bone className="h-16 w-4/5 rounded-2xl" />
+          </div>
+        </div>
       </div>
     </div>
   )
