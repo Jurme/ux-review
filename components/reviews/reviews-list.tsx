@@ -9,7 +9,7 @@ import { AvatarStack, PageHeader, PhasePill, pageWrap, ProgressBar } from "@/com
 import { buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { canSeeReview, completionOf, phaseOf, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
-import { addDaysISO, formatDay, formatWeekday, parseISODate, todayISO, windowLabel } from "@/lib/format"
+import { addDaysISO, dateInTimeZone, formatDay, formatWeekday, parseISODate, windowLabel } from "@/lib/format"
 import { PHASE_META, PHASE_ORDER, tap } from "@/lib/presentation"
 import { useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -31,11 +31,16 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
   const [day, setDay] = useState<string | null>(null)
   const [today, setToday] = useState<string | null>(null)
   const [allDays, setAllDays] = useState(false)
+  const zone = workspace?.timezone
   useEffect(() => {
-    const current = todayISO()
-    setToday(current)
-    setDay((value) => value ?? current)
-  }, [])
+    if (!zone) return
+    const id = window.setTimeout(() => {
+      const current = dateInTimeZone(zone)
+      setToday(current)
+      setDay((value) => value ?? current)
+    }, 0)
+    return () => window.clearTimeout(id)
+  }, [zone])
   const people = useMemo(() => new Map(users.map((person) => [person.id, person])), [users])
   if (!user || !workspace) return null
 
@@ -100,7 +105,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
             type="button"
             className={cn(buttonVariants({ variant: "outline" }), "h-10 rounded-xl", showingToday && "border-[#222]")}
             onClick={() => {
-              const current = todayISO()
+              const current = dateInTimeZone(workspace.timezone)
               setAllDays(false)
               setToday(current)
               setDay(current)
@@ -113,7 +118,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
             className={cn(buttonVariants({ variant: "outline", size: "icon" }), "rounded-xl")}
             onClick={() => {
               setAllDays(false)
-              setDay((current) => addDaysISO(current ?? todayISO(), -1))
+              setDay((current) => addDaysISO(current ?? dateInTimeZone(workspace.timezone), -1))
             }}
             aria-label="Previous day"
           >
@@ -124,7 +129,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
             className={cn(buttonVariants({ variant: "outline", size: "icon" }), "rounded-xl")}
             onClick={() => {
               setAllDays(false)
-              setDay((current) => addDaysISO(current ?? todayISO(), 1))
+              setDay((current) => addDaysISO(current ?? dateInTimeZone(workspace.timezone), 1))
             }}
             aria-label="Next day"
           >

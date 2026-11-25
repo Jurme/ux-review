@@ -7,7 +7,7 @@ import {
   validateReview,
 } from "@/lib/domain"
 import { createSeed } from "@/lib/seed"
-import { addDaysISO, clip, diffDays, formatDay, isEmail, normalizeHttpUrl, todayISO, uid } from "@/lib/format"
+import { addDaysISO, clip, dateInTimeZone, diffDays, formatDay, isEmail, normalizeHttpUrl, timeInTimeZone, uid } from "@/lib/format"
 import type {
   Activity,
   AppState,
@@ -152,6 +152,8 @@ export function saveReview(
   if (!state.users.some((item) => item.id === ownerId)) return same(state, "Choose an owner who is in the workspace.")
   const now = stamp()
   const publishing = mode === "publish" && (!existing || existing.lifecycle === "draft")
+  const sentOn = dateInTimeZone(state.workspace.timezone)
+  const span = Math.max(draft.startDate && draft.deadline ? diffDays(draft.startDate, draft.deadline) : 0, 0)
   const review: Review = {
     id: existing?.id ?? id ?? uid("review"),
     title: clip(draft.title, 120),
@@ -162,9 +164,9 @@ export function saveReview(
     figmaUrl: normalizeHttpUrl(draft.figmaUrl),
     designVersion: clip(draft.designVersion, 40),
     referenceUrls: draft.referenceUrls.map((url) => normalizeHttpUrl(url)).filter(Boolean),
-    startDate: publishing ? todayISO() : draft.startDate,
-    deadline: publishing ? addDaysISO(todayISO(), Math.max(draft.startDate && draft.deadline ? diffDays(draft.startDate, draft.deadline) : 0, 0)) : draft.deadline,
-    startTime: publishing ? currentTime() : draft.startTime,
+    startDate: publishing ? sentOn : draft.startDate,
+    deadline: publishing ? addDaysISO(sentOn, span) : draft.deadline,
+    startTime: publishing ? timeInTimeZone(state.workspace.timezone) : draft.startTime,
     endTime: draft.endTime,
     timezone: draft.timezone || state.workspace.timezone,
     reminderHours: draft.reminderHours,
@@ -444,7 +446,7 @@ export function saveFeedback(state: AppState, draft: FeedbackDraft, mode: "draft
         return reviewer
       })
     : [...review.reviewers, { userId: user.id, focus: "General", status: reviewed ? "completed" as const : "in_progress" as const }]
-  const today = todayISO()
+  const today = dateInTimeZone(state.workspace.timezone)
   const startDate = review.startDate > today ? today : review.startDate
   let next: AppState = {
     ...replaceReview({ ...state, feedback }, { ...review, reviewers, startDate, updatedAt: now }),
@@ -605,11 +607,6 @@ export function saveTemplate(state: AppState, name: string, criteriaIds: string[
 
 export function deleteTemplate(state: AppState, id: string): Mutation {
   return done({ ...state, templates: state.templates.filter((item) => item.id !== id) }, "Template removed.")
-}
-
-function currentTime() {
-  const now = new Date()
-  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
 }
 
 export function inviteMember(state: AppState, input: { name: string; email: string }): Mutation {

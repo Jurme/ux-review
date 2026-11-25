@@ -20,6 +20,41 @@ export function todayISO() {
   return toISODate(new Date())
 }
 
+export function dateInTimeZone(timeZone: string, date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date)
+    const year = parts.find((part) => part.type === "year")?.value
+    const month = parts.find((part) => part.type === "month")?.value
+    const day = parts.find((part) => part.type === "day")?.value
+    if (year && month && day) return `${year}-${month}-${day}`
+  } catch {
+    // An unknown zone falls back to the machine clock.
+  }
+  return toISODate(date)
+}
+
+export function timeInTimeZone(timeZone: string, date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date)
+    let hour = parts.find((part) => part.type === "hour")?.value ?? "00"
+    const minute = parts.find((part) => part.type === "minute")?.value ?? "00"
+    if (hour === "24") hour = "00"
+    return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`
+  } catch {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+  }
+}
+
 export function addDays(date: Date, days: number) {
   const next = new Date(date)
   next.setDate(next.getDate() + days)

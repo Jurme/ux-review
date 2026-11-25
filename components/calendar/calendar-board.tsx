@@ -9,7 +9,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { SendDesignLink } from "@/components/reviews/create-review"
 import { ReviewRoleToggle, type ReviewBucket } from "@/components/reviews/role-toggle"
 import { canSeeReview, isManager, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
-import { addDays, formatDay, formatLongDate, formatMonth, startOfWeek, todayISO, toISODate } from "@/lib/format"
+import { addDays, dateInTimeZone, formatDay, formatLongDate, formatMonth, parseISODate, startOfWeek, toISODate } from "@/lib/format"
 import { tap } from "@/lib/presentation"
 import { rescheduleReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -30,10 +30,15 @@ const HOURS = Array.from({ length: HOUR_END - HOUR_START }, (_, index) => HOUR_S
 
 export function CalendarBoard() {
   const { user, users, reviews, feedback, workspace } = useWorkspace()
+  const zone = workspace?.timezone
   const [cursor, setCursor] = useState<Date | null>(null)
   useEffect(() => {
-    setCursor((current) => current ?? new Date())
-  }, [])
+    if (!zone) return
+    const id = window.setTimeout(() => {
+      setCursor((current) => current ?? parseISODate(dateInTimeZone(zone)))
+    }, 0)
+    return () => window.clearTimeout(id)
+  }, [zone])
   const [view, setView] = useState<View>("week")
   const [project, setProject] = useState("all")
   const [status, setStatus] = useState<ReviewListStatus | "all">("all")
@@ -44,7 +49,7 @@ export function CalendarBoard() {
   const people = useMemo(() => new Map(users.map((person) => [person.id, person])), [users])
   if (!user || !cursor || !workspace) return null
   const focus = cursor
-  const today = todayISO()
+  const today = dateInTimeZone(workspace.timezone)
   const projects = [...workspace.projects].sort((a, b) => a.localeCompare(b))
 
   const matched = reviews.filter((review) => {
@@ -108,7 +113,7 @@ export function CalendarBoard() {
               key={item}
               type="button"
               onClick={() => {
-                if (item === "day") setCursor(new Date())
+                if (item === "day") setCursor(parseISODate(dateInTimeZone(workspace.timezone)))
                 setView(item)
               }}
               className={cn("h-8 rounded-lg px-3 text-[13px] font-medium capitalize", tap, view === item ? "bg-white text-[#222] shadow-sm" : "text-[#717171]")}

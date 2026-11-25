@@ -22,7 +22,11 @@ function publish(next: Snap) {
   listeners.forEach((listener) => listener())
 }
 
-export async function refreshWorkspace() {
+export function readWorkspace() {
+  return snap.gate === "ready" ? snap.state : null
+}
+
+export async function refreshWorkspace(options?: { quiet?: boolean }) {
   try {
     const response = await fetch("/api/workspace", { cache: "no-store", signal: AbortSignal.timeout(8000) })
     if (response.status === 401) {
@@ -35,19 +39,28 @@ export async function refreshWorkspace() {
       return
     }
     if (!response.ok || !body?.state || typeof body.revision !== "number") {
-      publish({ gate: "signed_out" })
+      if (!options?.quiet) publish({ gate: "signed_out" })
       return
     }
+    if (snap.gate === "ready" && body.revision <= revision) return
     publish({ gate: "ready", state: body.state, revision: body.revision })
   } catch {
-    publish({ gate: "signed_out" })
+    if (!options?.quiet) publish({ gate: "signed_out" })
   }
+}
+
+function syncIfReady() {
+  if (snap.gate !== "ready" || document.visibilityState !== "visible") return
+  void refreshWorkspace({ quiet: true })
 }
 
 function bootstrap() {
   if (started || typeof window === "undefined") return
   started = true
   void refreshWorkspace()
+  window.setInterval(syncIfReady, 4000)
+  document.addEventListener("visibilitychange", syncIfReady)
+  window.addEventListener("focus", syncIfReady)
 }
 
 function read(): Snap {

@@ -1,15 +1,15 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar } from "@/components/common"
 import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/constants"
-import { todayISO } from "@/lib/format"
+import { dateInTimeZone } from "@/lib/format"
 import { tap } from "@/lib/presentation"
-import { saveReview, useWorkspace } from "@/lib/store"
+import { readWorkspace, refreshWorkspace, saveReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import type { ReviewDraft } from "@/lib/types"
 
@@ -48,6 +48,10 @@ function SendForm() {
     return REMINDER_OPTIONS.some((item) => item.value === current) ? Number(current) : DEFAULT_REMINDER_MINUTES
   })
 
+  useEffect(() => {
+    void refreshWorkspace({ quiet: true })
+  }, [])
+
   const projects = useMemo(() => {
     const fromReviews = reviews.map((review) => review.project)
     return [...new Set([...(workspace?.projects ?? []), ...fromReviews])].filter(Boolean).sort()
@@ -78,7 +82,17 @@ function SendForm() {
   }
 
   async function submit() {
-    const startDate = todayISO()
+    let ids = selectedIds
+    if (reviewerIds === null) {
+      await refreshWorkspace({ quiet: true })
+      const latest = readWorkspace()
+      if (latest && user) {
+        ids = latest.users
+          .filter((person) => person.accountStatus === "active" && person.id !== user.id)
+          .map((person) => person.id)
+      }
+    }
+    const startDate = dateInTimeZone(workspace!.timezone)
     const links = figmaLinks.map((item) => item.trim()).filter(Boolean)
     const draft: ReviewDraft = {
       title,
@@ -97,7 +111,7 @@ function SendForm() {
       reminderHours: reminder,
       shareFeedback: true,
       criteriaIds: [],
-      reviewers: selectedIds.map((userId) => ({ userId, focus: "General" })),
+      reviewers: ids.map((userId) => ({ userId, focus: "General" })),
     }
     const result = await saveReview(draft, "publish")
     if (!result.ok) {
