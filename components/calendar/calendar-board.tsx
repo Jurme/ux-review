@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { toast } from "sonner"
@@ -97,7 +98,7 @@ export function CalendarBoard() {
       <PageHeader
         eyebrow="Calendar"
         title={label}
-        description="The week shows each review on the day it is due. Drag a review to another day to move that deadline."
+        description="Click a day to send a design due that day. Drag a review to another day to move its deadline."
         action={
           <SendDesignLink className={cn(buttonVariants({ size: "lg" }))}>
             <Plus />
@@ -230,6 +231,7 @@ function WeekGrid({
   onDrop: (id: string, date: string) => void
 }) {
   const dragged = useRef(false)
+  const router = useRouter()
   const columns = days.length
   return (
     <div className="overflow-x-auto rounded-2xl border border-[#E5E5E5] bg-white">
@@ -242,7 +244,7 @@ function WeekGrid({
               <div key={iso} className="border-l border-[#E5E5E5] px-2 py-3 text-center first:border-l-0">
                 <div className="text-[12px] font-medium text-[#717171]">{day.toLocaleDateString("en-GB", { weekday: "short" })}</div>
                 {iso >= today ? (
-                  <SendDesignLink className={cn("mx-auto mt-1 grid size-8 place-items-center rounded-full text-[14px] font-semibold", iso === today ? "bg-[#FF385C] text-white" : "text-[#222] hover:bg-[#F7F7F7]")}>
+                  <SendDesignLink date={iso} className={cn("relative z-10 mx-auto mt-1 grid size-8 place-items-center rounded-full text-[14px] font-semibold", iso === today ? "bg-[#FF385C] text-white" : "text-[#222] hover:bg-[#F7F7F7]")}>
                     {day.getDate()}
                   </SendDesignLink>
                 ) : (
@@ -288,6 +290,36 @@ function WeekGrid({
               const items = layoutDay(reviews.filter((review) => review.deadline === iso))
               return (
                 <div key={iso} className="relative">
+                  <button
+                    type="button"
+                    aria-label={iso >= today ? `Send a design due ${formatDay(iso)}` : `${formatDay(iso)} is in the past`}
+                    onDragOver={(event) => {
+                      if (!dragging) return
+                      event.preventDefault()
+                      onHover(iso)
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      const id = event.dataTransfer.getData("text/plain")
+                      if (id) onDrop(id, iso)
+                    }}
+                    onClick={() => {
+                      if (dragged.current) {
+                        dragged.current = false
+                        return
+                      }
+                      if (iso < today) {
+                        toast.error("Choose today or a later day.")
+                        return
+                      }
+                      router.push(`/reviews/new?new=${crypto.randomUUID()}&date=${iso}`)
+                    }}
+                    className={cn(
+                      "pointer-events-auto absolute inset-0 border-0 bg-transparent p-0",
+                      iso >= today && "cursor-pointer hover:bg-[#F7F7F7]/80",
+                      dropDate === iso && dragging && "bg-[#F7F7F7]",
+                    )}
+                  />
                   {items.map((item) => {
                     const state = reviewListStatus(item.review.id, feedback, item.review.ownerId)
                     const owner = people.get(item.review.ownerId)
@@ -315,7 +347,7 @@ function WeekGrid({
                           width: `calc(${100 / item.columns}% - 8px)`,
                         }}
                         className={cn(
-                          "pointer-events-auto absolute overflow-hidden rounded-lg border px-2 py-1 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+                          "pointer-events-auto absolute z-10 overflow-hidden rounded-lg border px-2 py-1 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
                           cardHover,
                           STATUS_META[state].chip,
                           dragging === item.review.id && "opacity-60",
@@ -360,6 +392,7 @@ function MonthGrid({
   onDrop: (id: string, date: string) => void
 }) {
   const dragged = useRef(false)
+  const router = useRouter()
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
   const gridStart = startOfWeek(first)
   const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index))
@@ -389,15 +422,20 @@ function MonthGrid({
                   const id = event.dataTransfer.getData("text/plain")
                   if (id) onDrop(id, iso)
                 }}
-                className={cn("min-h-[124px] border-r border-b border-[#E5E5E5] p-1.5 last:border-r-0", dropDate === iso && dragging && "bg-[#F7F7F7]")}
+                onClick={() => {
+                  if (dragged.current) {
+                    dragged.current = false
+                    return
+                  }
+                  if (iso < today) {
+                    toast.error("Choose today or a later day.")
+                    return
+                  }
+                  router.push(`/reviews/new?new=${crypto.randomUUID()}&date=${iso}`)
+                }}
+                className={cn("min-h-[124px] border-r border-b border-[#E5E5E5] p-1.5 last:border-r-0", iso >= today && "cursor-pointer hover:bg-[#FAFAFA]", dropDate === iso && dragging && "bg-[#F7F7F7]")}
               >
-                {iso >= today ? (
-                  <SendDesignLink className={cn("mb-1 inline-flex size-7 items-center justify-center rounded-full text-[13px]", iso === today ? "bg-[#FF385C] font-medium text-white" : outside ? "text-[#B0B0B0] hover:bg-[#F7F7F7]" : "text-[#222] hover:bg-[#F7F7F7]")}>
-                    {day.getDate()}
-                  </SendDesignLink>
-                ) : (
-                  <span className={cn("mb-1 inline-flex size-7 items-center justify-center rounded-full text-[13px]", outside ? "text-[#B0B0B0]" : "text-[#222]")}>{day.getDate()}</span>
-                )}
+                <span className={cn("mb-1 inline-flex size-7 items-center justify-center rounded-full text-[13px]", iso === today ? "bg-[#FF385C] font-medium text-white" : outside ? "text-[#B0B0B0]" : "text-[#222]")}>{day.getDate()}</span>
                 <div className="space-y-1">
                   {items.map((review) => {
                     const state = reviewListStatus(review.id, feedback, review.ownerId)
@@ -414,11 +452,12 @@ function MonthGrid({
                         }}
                         onDragEnd={onDragEnd}
                         onClick={(click) => {
+                          click.stopPropagation()
                           if (!dragged.current) return
                           click.preventDefault()
                           dragged.current = false
                         }}
-                        className={cn("block truncate rounded-md border px-1.5 py-1 text-[11px] font-medium", cardHover, STATUS_META[state].chip)}
+                        className={cn("relative z-10 block truncate rounded-md border px-1.5 py-1 text-[11px] font-medium", cardHover, STATUS_META[state].chip)}
                       >
                         {review.title}
                       </Link>

@@ -7,7 +7,7 @@ import { Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar, Spinner } from "@/components/common"
 import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/constants"
-import { dateInTimeZone } from "@/lib/format"
+import { dateInTimeZone, formatDay } from "@/lib/format"
 import { tap } from "@/lib/presentation"
 import { readWorkspace, refreshWorkspace, saveReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -18,15 +18,18 @@ export function CreateReview() {
   return <SendForm key={fresh} />
 }
 
-export function SendDesignLink({ className, children }: { className?: string; children: React.ReactNode }) {
+export function SendDesignLink({ className, children, date }: { className?: string; children?: React.ReactNode; date?: string }) {
   const router = useRouter()
+  const href = date ? `/reviews/new?date=${date}` : "/reviews/new"
   return (
     <Link
-      href="/reviews/new"
+      href={href}
       className={className}
       onClick={(event) => {
         event.preventDefault()
-        router.push(`/reviews/new?new=${crypto.randomUUID()}`)
+        const params = new URLSearchParams({ new: crypto.randomUUID() })
+        if (date) params.set("date", date)
+        router.push(`/reviews/new?${params}`)
       }}
     >
       {children}
@@ -36,6 +39,7 @@ export function SendDesignLink({ className, children }: { className?: string; ch
 
 function SendForm() {
   const router = useRouter()
+  const requestedDate = useSearchParams().get("date") ?? ""
   const { user, users, reviews, workspace } = useWorkspace()
   const [title, setTitle] = useState("")
   const [project, setProject] = useState("")
@@ -59,6 +63,8 @@ function SendForm() {
   }, [reviews, workspace?.projects])
 
   if (!user || !workspace) return null
+  const today = dateInTimeZone(workspace.timezone)
+  const due = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && requestedDate >= today ? requestedDate : today
   const signedIn = users.filter((person) => person.accountStatus === "active" && person.id !== user.id)
   const selectedIds = reviewerIds ?? signedIn.map((person) => person.id)
   const selected = selectedIds.map((id) => signedIn.find((person) => person.id === id)).filter((person) => person !== undefined)
@@ -96,7 +102,6 @@ function SendForm() {
           .map((person) => person.id)
       }
     }
-    const startDate = dateInTimeZone(workspace!.timezone)
     const links = figmaLinks.map((item) => item.trim()).filter(Boolean)
     const draft: ReviewDraft = {
       title,
@@ -107,8 +112,8 @@ function SendForm() {
       figmaUrl: links[0] ?? "",
       designVersion: "",
       referenceUrls: links.slice(1),
-      startDate,
-      deadline: startDate,
+      startDate: today,
+      deadline: due,
       startTime: "",
       endTime: "",
       timezone: workspace!.timezone,
@@ -140,7 +145,9 @@ function SendForm() {
     <div className="mx-auto w-full max-w-[720px] px-6 py-8 md:px-0 md:py-2">
       <h1 className="text-[28px] font-bold tracking-tight">Send a design for review</h1>
       <p className="mt-1 text-[14px] text-[#717171]">
-        The review is stamped with the date and time you send it.
+        {due === today
+          ? "The review is due today, stamped with the time you send it."
+          : `Due ${formatDay(due)}. It is sent today and stays open until that day.`}
       </p>
       <form className="mt-6 rounded-[20px] border border-[#EBEBEB] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]" autoComplete="off" onSubmit={(event) => event.preventDefault()}>
         <label className="mt-1 block text-[13px] font-semibold">Project</label>
