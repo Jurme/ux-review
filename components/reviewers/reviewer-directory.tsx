@@ -1,18 +1,17 @@
 "use client"
 
-import Link from "next/link"
 import { useState } from "react"
 import { toast } from "sonner"
 import { EmptyState, PageHeader, pageWrap } from "@/components/common"
 import { Input } from "@/components/ui/input"
-import { phaseOf } from "@/lib/domain"
+import { reviewListStatus } from "@/lib/domain"
 import { tap } from "@/lib/presentation"
 import { inviteMember, removeMember, updateMember, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import type { Role } from "@/lib/types"
 
 export function ReviewerDirectory() {
-  const { user, users, reviews } = useWorkspace()
+  const { user, users, reviews, feedback } = useWorkspace()
   const [query, setQuery] = useState("")
   const [email, setEmail] = useState("")
   const [pending, setPending] = useState(false)
@@ -69,15 +68,16 @@ export function ReviewerDirectory() {
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Role</th>
-                <th className="px-4 py-3 font-medium">Open reviews</th>
-                <th className="px-4 py-3 font-medium">Reviews</th>
+                <th className="px-4 py-3 font-medium">Sent</th>
+                <th className="px-4 py-3 font-medium">Status</th>
                 {user.role === "admin" ? <th className="px-4 py-3 font-medium"> </th> : null}
               </tr>
             </thead>
             <tbody>
               {shown.map((person) => {
-                const open = reviews.filter((review) => review.lifecycle === "open" && (review.ownerId === person.id || review.reviewers.some((reviewer) => reviewer.userId === person.id && reviewer.status !== "completed"))).length
-                const related = reviews.filter((review) => review.ownerId === person.id || review.reviewers.some((reviewer) => reviewer.userId === person.id))
+                const sent = reviews.filter((review) => review.ownerId === person.id && review.lifecycle !== "draft")
+                const counts = { pending: 0, in_progress: 0, completed: 0 }
+                for (const review of sent) counts[reviewListStatus(review.id, feedback)] += 1
                 return (
                   <tr key={person.id} className="border-t border-[#EBEBEB] align-top">
                     <td className="px-4 py-3 font-medium">{person.name}</td>
@@ -104,22 +104,9 @@ export function ReviewerDirectory() {
                         person.role === "admin" ? "Admin" : "Reviewer"
                       )}
                     </td>
-                    <td className="px-4 py-3">{open}</td>
-                    <td className="px-4 py-3">
-                      {related.length === 0 ? (
-                        <span className="text-[#717171]">None</span>
-                      ) : (
-                        <ul className="space-y-1">
-                          {related.slice(0, 4).map((review) => (
-                            <li key={review.id}>
-                              <Link href={`/reviews/${review.id}`} className="hover:underline">
-                                {review.title}
-                                <span className="ml-2 text-[12px] text-[#717171]">{phaseOf(review).replaceAll("_", " ")}</span>
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                    <td className="px-4 py-3">{sent.length}</td>
+                    <td className="px-4 py-3 text-[13px] text-[#717171]">
+                      {sent.length === 0 ? "—" : `${counts.pending} pending · ${counts.in_progress} in progress · ${counts.completed} completed`}
                     </td>
                     {user.role === "admin" ? (
                       <td className="px-4 py-3">
