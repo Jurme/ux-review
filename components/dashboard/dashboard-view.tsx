@@ -77,27 +77,6 @@ export function DashboardView() {
         </section>
       ) : null}
 
-      {needsYou.length > 0 ? (
-        <section className="mt-8 rounded-2xl border border-[#EBEBEB] px-5 py-4">
-          <h2 className="text-[13px] font-medium text-[#717171]">Needs you</h2>
-          <ul className="mt-1 divide-y divide-[#EBEBEB]">
-            {needsYou.map((review) => (
-              <li key={review.id}>
-                <Link href={`/reviews/${review.id}`} className="flex items-center justify-between gap-4 py-3">
-                  <span>
-                    <span className="block font-medium">{review.title}</span>
-                    <span className="mt-0.5 block text-[13px] text-[#717171]">
-                      {review.project} · Sent {formatDay(review.startDate)} · {assignmentFor(review, user.id)?.focus}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[13px] font-medium text-[#FF385C]">Give feedback</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       <section className="mt-8 grid grid-cols-1 overflow-hidden rounded-2xl border border-[#EBEBEB] sm:grid-cols-3">
         {stats.map((stat, index) => (
           <div key={stat.label} className={cn("bg-white px-5 py-4", index > 0 && "border-t border-[#EBEBEB] sm:border-t-0 sm:border-l")}>
