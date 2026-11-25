@@ -1,6 +1,7 @@
 "use client"
 
-import { useSyncExternalStore } from "react"
+import { useLayoutEffect, useSyncExternalStore } from "react"
+import { hasSessionHint, readCachedWorkspace, saveCachedWorkspace, sessionHint } from "@/lib/local-workspace"
 import type { AppState, Mutation } from "@/lib/types"
 
 type Snap =
@@ -20,10 +21,39 @@ let queue: Promise<void> = Promise.resolve()
 const listeners = new Set<() => void>()
 const busyListeners = new Set<() => void>()
 
+function accountEmail(state: AppState) {
+  return state.users.find((user) => user.id === state.currentUserId)?.email.trim().toLowerCase() ?? ""
+}
+
 function publish(next: Snap) {
   snap = next
-  if (next.gate === "ready") revision = next.revision
+  if (next.gate === "ready") {
+    revision = next.revision
+    saveCachedWorkspace(next.state, next.revision)
+    sessionHint(true)
+  } else if (next.gate === "signed_out") sessionHint(false)
   listeners.forEach((listener) => listener())
+}
+
+export function leaveWorkspace() {
+  if (snap.gate === "signed_out") return
+  revision = 0
+  publish({ gate: "signed_out" })
+}
+
+export function openFromCache(email?: string) {
+  const normalized = email?.trim().toLowerCase() ?? ""
+  const cached = readCachedWorkspace(normalized || undefined)
+  if (!cached) {
+    if (normalized && snap.gate === "ready" && accountEmail(snap.state) !== normalized) {
+      revision = 0
+      publish(LOADING)
+    }
+    return false
+  }
+  if (snap.gate === "ready" && accountEmail(snap.state) === accountEmail(cached.state) && revision >= cached.revision) return true
+  publish({ gate: "ready", state: cached.state, revision: cached.revision })
+  return true
 }
 
 export function readWorkspace() {
@@ -88,17 +118,29 @@ function syncIfReady() {
   void refreshWorkspace({ quiet: true })
 }
 
-function bootstrap() {
+function bootClient() {
   if (started || typeof window === "undefined") return
   started = true
-  if (window.location.pathname !== "/login") void refreshWorkspace()
   window.setInterval(syncIfReady, 8000)
   document.addEventListener("visibilitychange", syncIfReady)
   window.addEventListener("focus", syncIfReady)
+  window.addEventListener("storage", (event) => {
+    if (event.key !== "ux-review.workspace" || window.location.pathname === "/login" || snap.gate !== "ready") return
+    openFromCache(accountEmail(snap.state))
+  })
+}
+
+export function ensureWorkspace() {
+  if (typeof window === "undefined") return
+  bootClient()
+  if (window.location.pathname === "/login") return
+  if (snap.gate === "loading" && !inflight) {
+    const warmed = hasSessionHint() && openFromCache()
+    void refreshWorkspace({ quiet: warmed })
+  }
 }
 
 function read(): Snap {
-  bootstrap()
   return snap
 }
 
@@ -109,6 +151,9 @@ function subscribe(listener: () => void) {
 
 export function useWorkspace() {
   const current = useSyncExternalStore(subscribe, read, () => LOADING)
+  useLayoutEffect(() => {
+    ensureWorkspace()
+  }, [])
   const state = current.gate === "ready" ? current.state : null
   const user = state?.users.find((item) => item.id === state.currentUserId) ?? null
   return {

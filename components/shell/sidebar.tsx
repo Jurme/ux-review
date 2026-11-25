@@ -23,7 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useWorkspace } from "@/lib/store"
+import { leaveWorkspace, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { tap } from "@/lib/presentation"
 
@@ -145,7 +145,7 @@ export function Sidebar({
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="cursor-pointer"
-                onClick={() => signOut({ callbackUrl: "/login" })}
+                onClick={() => { leaveWorkspace(); void signOut({ callbackUrl: "/login" }) }}
               >
                 <LogOut className="size-4" />
                 Log out

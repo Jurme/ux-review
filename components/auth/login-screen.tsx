@@ -2,14 +2,19 @@
 
 import { signOut } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
 import { toast } from "sonner"
 import { Mark, Spinner } from "@/components/common"
-import { refreshWorkspace, useWorkspace } from "@/lib/store"
+import { rememberedEmail } from "@/lib/local-workspace"
+import { leaveWorkspace, openFromCache, refreshWorkspace, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { tap } from "@/lib/presentation"
 
 let csrfPromise: Promise<string> | null = null
+
+function subscribeEmail() {
+  return () => {}
+}
 
 function csrfToken() {
   csrfPromise ??= fetch("/api/auth/csrf", { headers: { accept: "application/json" } })
@@ -52,14 +57,17 @@ export function LoginScreen() {
   const params = useSearchParams()
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in")
   const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
+  const storedEmail = useSyncExternalStore(subscribeEmail, rememberedEmail, () => "")
+  const [email, setEmail] = useState<string | null>(null)
+  const emailValue = email ?? storedEmail
   const [password, setPassword] = useState("")
   const [pending, setPending] = useState(false)
   const [notice, setNotice] = useState("")
 
   useEffect(() => {
+    router.prefetch("/dashboard")
     void csrfToken().catch(() => undefined)
-  }, [])
+  }, [router])
 
   const error = params.get("error")
 
@@ -67,7 +75,7 @@ export function LoginScreen() {
     try {
       const token = await csrfToken()
       csrfPromise = null
-      const outcome = await postCredentials(email, password, token)
+      const outcome = await postCredentials(emailValue, password, token)
       if (outcome !== "ok") {
         void csrfToken().catch(() => undefined)
         return outcome
@@ -76,13 +84,14 @@ export function LoginScreen() {
       csrfPromise = null
       return "failed" as const
     }
-    void refreshWorkspace()
+    const warmed = openFromCache(emailValue)
+    void refreshWorkspace({ quiet: warmed })
     router.replace("/dashboard")
     return "ok" as const
   }
 
   async function submitEmail() {
-    if (!email.trim() || !password) {
+    if (!emailValue.trim() || !password) {
       setNotice("Enter your email and password.")
       return
     }
@@ -92,6 +101,7 @@ export function LoginScreen() {
     }
     setNotice("")
     setPending(true)
+    let stayPending = false
     try {
       if (mode === "sign-in") {
         const outcome = await finishSignIn()
@@ -103,13 +113,13 @@ export function LoginScreen() {
           const message = outcome === "wrong_password" ? "That password is wrong." : "Sign-in didn’t finish. Try again."
           setNotice(message)
           toast.error(message)
-        }
+        } else stayPending = true
         return
       }
       const response = await fetch("/api/register", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email: emailValue, password }),
       })
       const body = (await response.json().catch(() => null)) as { ok?: boolean; message?: string } | null
       if (response.status === 409) {
@@ -129,9 +139,9 @@ export function LoginScreen() {
         const message = "Account created, but sign-in did not finish. Try again."
         setNotice(message)
         toast.error(message)
-      }
+      } else stayPending = true
     } finally {
-      setPending(false)
+      if (!stayPending) setPending(false)
     }
   }
 
@@ -142,7 +152,7 @@ export function LoginScreen() {
         <p className="mt-3 text-[16px] leading-7 text-[#717171]">
           You’re signed in as {inviteEmail || "this account"}. An admin needs to invite that email before you can open reviews.
         </p>
-        <button type="button" className={cn("btn mt-8", tap)} onClick={() => signOut({ callbackUrl: "/login" })}>
+        <button type="button" className={cn("btn mt-8", tap)} onClick={() => { leaveWorkspace(); void signOut({ callbackUrl: "/login" }) }}>
           Sign out
         </button>
       </Shell>
@@ -187,7 +197,7 @@ export function LoginScreen() {
         {mode === "sign-up" ? (
           <input className="field" value={name} onChange={(event) => setName(event.target.value)} placeholder="Name" autoComplete="name" aria-label="Name" />
         ) : null}
-        <input className="field" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" autoComplete="email" aria-label="Email" />
+        <input className="field" type="email" value={emailValue} onChange={(event) => setEmail(event.target.value)} placeholder="Email" autoComplete="email" aria-label="Email" />
         <input className="field" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" autoComplete={mode === "sign-up" ? "new-password" : "current-password"} aria-label="Password" minLength={8} />
         {mode === "sign-up" ? <p className="text-[13px] text-[#717171]">Use at least 8 characters.</p> : null}
         <button type="submit" className={cn("btn btn-primary inline-flex w-full items-center justify-center gap-2", tap)} disabled={pending}>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useLayoutEffect } from "react"
 import { Boot } from "@/components/common"
 import { useWorkspace } from "@/lib/store"
 
@@ -9,7 +9,7 @@ export default function HomePage() {
   const { ready, user, gate } = useWorkspace()
   const router = useRouter()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!ready) return
     if (gate === "invite") router.replace("/login")
     else router.replace(user ? "/dashboard" : "/login")

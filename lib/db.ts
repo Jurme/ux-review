@@ -134,7 +134,7 @@ function forgetRemote(db: Remote | undefined) {
   if (db) void db.end({ timeout: 1 }).catch(() => undefined)
 }
 
-async function remote() {
+async function connect() {
   const url = pooledDatabaseUrl()
   if (!url) return null
   if (readEnv("VERCEL") && !isPoolerUrl(url) && /supabase\.(co|com)/i.test(url)) {
@@ -151,7 +151,12 @@ async function remote() {
       ssl: prepared.ssl,
     })
   }
-  const db = holders.uxReviewPg
+  return holders.uxReviewPg
+}
+
+async function remote() {
+  const db = await connect()
+  if (!db) return null
   holders.uxReviewPgReady ??= applyMigrations(db).catch((error: unknown) => {
     forgetRemote(db)
     throw error
@@ -165,9 +170,7 @@ async function remote() {
   return db
 }
 
-export async function sql<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
-  const db = await remote()
-  if (db) return (await db.unsafe(text, params as never[])) as unknown as T[]
+async function localRows<T>(text: string, params: unknown[]) {
   if (readEnv("VERCEL")) {
     throw new Error("Set POSTGRES_URL to the Supabase pooled connection string.")
   }
@@ -176,6 +179,19 @@ export async function sql<T = Record<string, unknown>>(text: string, params: unk
     throw error
   })
   return (await (await holders.uxReviewLocal).query<T>(text, params)).rows
+}
+
+export async function sql<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
+  const db = await remote()
+  if (db) return (await db.unsafe(text, params as never[])) as unknown as T[]
+  return localRows<T>(text, params)
+}
+
+// Sign-in only needs the credentials table, so it does not wait on workspace migrations.
+export async function sqlConnected<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
+  const db = await connect()
+  if (db) return (await db.unsafe(text, params as never[])) as unknown as T[]
+  return localRows<T>(text, params)
 }
 
 async function startLocal(): Promise<PGlite> {

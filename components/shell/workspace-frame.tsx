@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
 import { Boot, Mark } from "@/components/common"
 import { Sidebar } from "@/components/shell/sidebar"
-import { useWorkspace } from "@/lib/store"
+import { leaveWorkspace, useWorkspace } from "@/lib/store"
 import { tap } from "@/lib/presentation"
 import { cn } from "@/lib/utils"
 import { signOut } from "next-auth/react"
@@ -46,7 +46,7 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
           <p className="mt-3 text-[15px] leading-6 text-[#717171]">
             You’re signed in as {inviteEmail || "this account"}. Ask an admin to invite that email, then sign in again.
           </p>
-          <button type="button" className={cn("btn mt-6", tap)} onClick={() => signOut({ callbackUrl: "/login" })}>Sign out</button>
+          <button type="button" className={cn("btn mt-6", tap)} onClick={() => { leaveWorkspace(); void signOut({ callbackUrl: "/login" }) }}>Sign out</button>
         </div>
         <div className="hidden">{children}</div>
       </div>

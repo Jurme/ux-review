@@ -1,4 +1,4 @@
-import { sql } from "@/lib/db"
+import { sqlConnected as sql } from "@/lib/db"
 import { hashPassword, verifyPassword } from "@/lib/passwords"
 
 type Row = { email: string; name: string; password_hash: string }

@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, type ReactNode } from "react"
+import { Suspense, useLayoutEffect, type ReactNode } from "react"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { RouteProgress } from "@/components/shell/route-progress"
@@ -23,7 +23,7 @@ export function Providers({ children }: { children: ReactNode }) {
 function ThemeSync() {
   const { user, workspace } = useWorkspace()
   const theme = appearanceOf(user, workspace)
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
   return null

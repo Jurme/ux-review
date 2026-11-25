@@ -12,7 +12,7 @@ import { REMINDER_OPTIONS, TIMEZONES } from "@/lib/constants"
 import { tap } from "@/lib/presentation"
 import { signOut } from "next-auth/react"
 import { appearanceOf } from "@/lib/domain"
-import { addProject, removeProject, renameProject, resetDemo, setTheme, updateProfile, updateWorkspace, useWorkspace } from "@/lib/store"
+import { addProject, leaveWorkspace, removeProject, renameProject, resetDemo, setTheme, updateProfile, updateWorkspace, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 const TABS = [
@@ -257,7 +257,7 @@ function General({ confirm, setConfirm }: { confirm: boolean; setConfirm: (value
         <div>
           <Button
             variant="ghost"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => { leaveWorkspace(); void signOut({ callbackUrl: "/login" }) }}
           >
             Log out
           </Button>
