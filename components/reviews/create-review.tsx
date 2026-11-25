@@ -7,18 +7,11 @@ import { X } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar } from "@/components/common"
 import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/constants"
-import { addDaysISO, todayISO } from "@/lib/format"
+import { todayISO } from "@/lib/format"
 import { tap } from "@/lib/presentation"
 import { saveReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import type { ReviewDraft } from "@/lib/types"
-
-const WINDOWS = [
-  { days: 2, label: "2 days" },
-  { days: 3, label: "3 days" },
-  { days: 5, label: "5 days" },
-  { days: 7, label: "1 week" },
-]
 
 export function CreateReview() {
   const fresh = useSearchParams().get("new") ?? "blank"
@@ -48,7 +41,6 @@ function SendForm() {
   const [project, setProject] = useState("")
   const [figma, setFigma] = useState("")
   const [note, setNote] = useState("")
-  const [windowDays, setWindowDays] = useState(3)
   const [reviewerIds, setReviewerIds] = useState<string[] | null>(null)
   const [query, setQuery] = useState("")
   const [reminder, setReminder] = useState(() => {
@@ -93,7 +85,7 @@ function SendForm() {
       designVersion: "",
       referenceUrls: [],
       startDate,
-      deadline: addDaysISO(startDate, windowDays),
+      deadline: startDate,
       startTime: "",
       endTime: "",
       timezone: workspace!.timezone,
@@ -122,7 +114,7 @@ function SendForm() {
     <div className="mx-auto w-full max-w-[720px] px-6 py-8 md:px-0 md:py-2">
       <h1 className="text-[28px] font-bold tracking-tight">Send a design for review</h1>
       <p className="mt-1 text-[14px] text-[#717171]">
-        The review is stamped with the date and time you send it. Reviewers then have the window you choose.
+        The review is stamped with the date and time you send it.
       </p>
       <form className="mt-6 rounded-[20px] border border-[#EBEBEB] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]" autoComplete="off" onSubmit={(event) => event.preventDefault()}>
         <label className="mt-1 block text-[13px] font-semibold">Project</label>
@@ -141,12 +133,6 @@ function SendForm() {
         <input className="field" name="ux-review-title" autoComplete="off" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Access management flow" />
         <label className="field-label">Figma link</label>
         <input className="field" name="ux-review-figma" autoComplete="off" value={figma} onChange={(event) => setFigma(event.target.value)} placeholder="https://figma.com/design/…" />
-        <label className="field-label">Reviewers have</label>
-        <select className="field" value={windowDays} onChange={(event) => setWindowDays(Number(event.target.value))}>
-          {WINDOWS.map((item) => (
-            <option key={item.days} value={item.days}>{item.label}</option>
-          ))}
-        </select>
         <label className="field-label">Remind reviewers</label>
         <select className="field" value={reminder} onChange={(event) => setReminder(Number(event.target.value))}>
           {REMINDER_OPTIONS.map((item) => (
@@ -204,7 +190,7 @@ function SendForm() {
         <label className="field-label">Note to reviewers (optional)</label>
         <textarea className="field min-h-[76px]" name="ux-review-note" autoComplete="off" value={note} onChange={(event) => setNote(event.target.value)} />
         <p className="mt-4 text-[13px] text-[#717171]">
-          {selected.length} reviewer{selected.length === 1 ? "" : "s"} · due {addDaysISO(todayISO(), windowDays)} if you send it now
+          {selected.length} reviewer{selected.length === 1 ? "" : "s"} will be invited
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button type="button" className={cn("btn", tap)} onClick={() => router.back()}>Cancel</button>
