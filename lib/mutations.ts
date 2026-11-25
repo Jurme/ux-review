@@ -431,15 +431,15 @@ export function saveFeedback(state: AppState, draft: FeedbackDraft, mode: "draft
     ? state.feedback.map((item) => (item.id === record.id ? record : item))
     : [record, ...state.feedback]
   const known = review.reviewers.some((reviewer) => reviewer.userId === user.id)
+  const reviewed = mode === "submit"
   const reviewers = known
     ? review.reviewers.map((reviewer) => {
         if (reviewer.userId !== user.id) return reviewer
-        if (reviewer.status === "pending" || (reviewer.status === "completed" && (!existing || mode === "draft"))) {
-          return { ...reviewer, status: "in_progress" as const }
-        }
+        if (reviewed) return { ...reviewer, status: "completed" as const }
+        if (reviewer.status === "pending") return { ...reviewer, status: "in_progress" as const }
         return reviewer
       })
-    : [...review.reviewers, { userId: user.id, focus: "General", status: "in_progress" as const }]
+    : [...review.reviewers, { userId: user.id, focus: "General", status: reviewed ? "completed" as const : "in_progress" as const }]
   const today = todayISO()
   const startDate = review.startDate > today ? today : review.startDate
   let next: AppState = {
@@ -470,11 +470,9 @@ export function deleteFeedback(state: AppState, id: string): Mutation {
   if (!review || review.lifecycle !== "open") return same(state, "Notes can be removed while the review is open.")
   if (item.authorId !== user.id && !isManager(user, review)) return same(state, "You can remove your own notes.")
   const feedback = state.feedback.filter((entry) => entry.id !== id)
-  const still = feedback.some((entry) => entry.reviewId === review.id && entry.authorId === item.authorId)
+  const still = feedback.some((entry) => entry.reviewId === review.id && entry.authorId === item.authorId && entry.status !== "draft")
   const reviewers = review.reviewers.map((reviewer) => {
-    if (reviewer.userId === item.authorId && !still && reviewer.status === "in_progress") {
-      return { ...reviewer, status: "pending" as const }
-    }
+    if (reviewer.userId === item.authorId && !still) return { ...reviewer, status: "pending" as const }
     return reviewer
   })
   return done(replaceReview({ ...state, feedback }, { ...review, reviewers, updatedAt: stamp() }), "Note removed.")

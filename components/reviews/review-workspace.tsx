@@ -6,16 +6,15 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ArrowLeft, ExternalLink, Link2, Pencil } from "lucide-react"
 import { Avatar, PhasePill, ProgressBar, SeverityPill, pageWrap } from "@/components/common"
-import { completionOf, isManager, phaseOf, visibleFeedback } from "@/lib/domain"
+import { isManager, phaseOf, visibleFeedback } from "@/lib/domain"
 import { windowLabel } from "@/lib/format"
-import { PHASE_META, SEVERITY_META, tap } from "@/lib/presentation"
+import { SEVERITY_META, tap } from "@/lib/presentation"
 import {
   publishReview,
   remindReviewer,
   saveFeedback,
   setFeedbackStatus,
   setLifecycle,
-  setReviewerStatus,
   useWorkspace,
 } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -40,7 +39,8 @@ export function ReviewWorkspace({ id }: { id: string }) {
   const manager = isManager(user, review)
   const notes = visibleFeedback(review, user, feedback).filter((item) => item.status !== "draft")
   const activeCriteria = criteria.filter((item) => item.active).sort((a, b) => a.order - b.order)
-  const percent = completionOf(review)
+  const reviewedIds = new Set(notes.map((item) => item.authorId))
+  const percent = review.reviewers.length === 0 ? 0 : Math.round((review.reviewers.filter((item) => reviewedIds.has(item.userId)).length / review.reviewers.length) * 100)
   const links = [review.figmaUrl, ...review.referenceUrls].filter(Boolean)
 
   async function act(result: Promise<{ ok: boolean; message?: string }>) {
@@ -144,6 +144,7 @@ export function ReviewWorkspace({ id }: { id: string }) {
             {review.reviewers.map((assignment) => {
               const person = users.find((entry) => entry.id === assignment.userId)
               const count = notes.filter((item) => item.authorId === assignment.userId).length
+              const reviewed = count > 0
               return (
                 <li key={assignment.userId} className="flex flex-wrap items-center gap-3 py-3">
                   {person ? <Avatar user={person} size={32} /> : null}
@@ -151,20 +152,11 @@ export function ReviewWorkspace({ id }: { id: string }) {
                     <p className="text-[14px] font-medium">{person?.name ?? "Reviewer"}</p>
                     <p className="text-[12px] text-[#717171]">{assignment.focus} · {count} item{count === 1 ? "" : "s"}</p>
                   </div>
-                  <span className={cn("chip", PHASE_META[assignment.status === "completed" ? "completed" : assignment.status === "in_progress" ? "in_progress" : "draft"].chip)}>
-                    {assignment.status === "completed" ? "Done" : assignment.status === "in_progress" ? "In progress" : "Pending"}
+                  <span className={cn("chip", reviewed ? "bg-[#DCF5EA] text-[#008A5B]" : "bg-[#F7F7F7] text-[#717171]")}>
+                    {reviewed ? "Reviewed" : "Pending review"}
                   </span>
-                  {manager && assignment.status !== "completed" ? (
+                  {manager && !reviewed ? (
                     <button type="button" className={cn("btn btn-sm", tap)} onClick={() => act(remindReviewer(review.id, assignment.userId))}>Remind</button>
-                  ) : null}
-                  {(manager || user.id === assignment.userId) && review.lifecycle === "open" ? (
-                    <button
-                      type="button"
-                      className={cn("btn btn-sm", tap)}
-                      onClick={() => act(setReviewerStatus(review.id, assignment.userId, assignment.status === "completed" ? "in_progress" : "completed"))}
-                    >
-                      {assignment.status === "completed" ? "Mark in progress" : "Mark done"}
-                    </button>
                   ) : null}
                 </li>
               )
