@@ -8,7 +8,7 @@ import { PageHeader, pageWrap } from "@/components/common"
 import { ReviewSummary } from "@/components/reviews/review-summary"
 import { buttonVariants } from "@/components/ui/button"
 import { canSeeReview, completionOf, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
-import { addDaysISO, dateInTimeZone, formatDay, formatWeekday, parseISODate, windowLabel } from "@/lib/format"
+import { addDaysISO, dateInTimeZone, formatDay, formatWeekday, parseISODate } from "@/lib/format"
 import { tap } from "@/lib/presentation"
 import { useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -163,25 +163,24 @@ function ReviewGroup({
       {reviews.length === 0 ? (
         <p className="mt-4 text-[14px] text-[#717171]">{empty}</p>
       ) : (
-        <ul className="mt-2 divide-y divide-[#EBEBEB]">
+        <ul className="mt-2 space-y-3">
           {reviews.map((review) => {
             const owner = people.get(review.ownerId)
             const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
+            const done = review.reviewers.filter((item) => item.status === "completed").length
             return (
               <li key={review.id}>
                 <ReviewSummary
                   href={`/reviews/${review.id}`}
                   title={review.title}
-                  users={reviewers}
+                  project={review.project}
+                  sent={formatDay(review.startDate)}
+                  done={done}
+                  total={review.reviewers.length}
                   progress={completionOf(review)}
-                  caption={`${review.reviewers.filter((item) => item.status === "completed").length}/${review.reviewers.length || 0} finished · due ${formatDay(review.deadline)}`}
-                  detail={
-                    <span className="mt-1 block text-[13px] text-[#717171]">
-                      {review.project}
-                      {review.feature ? ` · ${review.feature}` : ""} · {windowLabel(review.startDate, review.deadline)} · {owner?.name}
-                    </span>
-                  }
-                  status={<ListStatusPill status={reviewListStatus(review.id, feedback, review.ownerId)} />}
+                  owner={owner?.name || "Unknown"}
+                  users={reviewers}
+                  status={reviewListStatus(review.id, feedback, review.ownerId)}
                 />
               </li>
             )
@@ -227,16 +226,6 @@ function Filter({
         ))}
       </select>
     </label>
-  )
-}
-
-function ListStatusPill({ status }: { status: ReviewListStatus }) {
-  const meta = LIST_STATUS[status]
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium", meta.chip)}>
-      <span className={cn("size-1.5 rounded-full", meta.dot)} />
-      {meta.label}
-    </span>
   )
 }
 

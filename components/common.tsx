@@ -67,7 +67,12 @@ export function AvatarStack({ users, size = 28 }: { users: Pick<User, "name">[];
         ))}
       </div>
       {extra > 0 && (
-        <span className="ml-1.5 text-[12px] text-[#717171]">+{extra}</span>
+        <span
+          className="ml-1.5 inline-flex items-center justify-center rounded-full bg-[#ECECEC] font-medium text-[#717171]"
+          style={{ width: size, height: size, fontSize: size < 28 ? 10 : 12 }}
+        >
+          +{extra}
+        </span>
       )}
     </div>
   )

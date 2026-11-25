@@ -264,6 +264,19 @@
   }
 }
 
+.review-track {
+  background: #d9d3c8;
+}
+.review-fill {
+  background: #1a1a1a;
+}
+:root[data-theme="dark"] .review-track {
+  background: #303030;
+}
+:root[data-theme="dark"] .review-fill {
+  background: #f2f2f2;
+}
+
 /* Native select arrows sit on the border. Draw one 8px in from the right edge. */
 @layer utilities {
   select:not(.appearance-none) {

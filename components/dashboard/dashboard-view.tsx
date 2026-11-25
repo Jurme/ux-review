@@ -96,39 +96,27 @@ export function DashboardView() {
             </Link>
           </div>
           <p className="mt-1 text-[13px] text-[#717171]">{bucket === "sent" ? "Reviews you sent that are still pending or in progress." : "Reviews you were invited to that are still pending or in progress."}</p>
-          <ul className="mt-4 divide-y divide-[#EBEBEB]">
+          <ul className="mt-4 space-y-3">
             {coming.length === 0 ? (
               <li className="py-8 text-[14px] text-[#717171]">{bucket === "sent" ? "Nothing you sent is waiting." : "Nothing you were invited to is waiting."}</li>
             ) : (
               coming.map((review) => {
                 const owner = people.get(review.ownerId)
                 const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
-                const status = reviewListStatus(review.id, feedback, review.ownerId)
+                const done = review.reviewers.filter((item) => item.status === "completed").length
                 return (
                   <li key={review.id}>
                     <ReviewSummary
                       href={`/reviews/${review.id}`}
                       title={review.title}
-                      users={reviewers}
+                      project={review.project}
+                      sent={formatDay(review.startDate)}
+                      done={done}
+                      total={review.reviewers.length}
                       progress={completionOf(review)}
-                      caption={`${completionOf(review)}%`}
-                      detail={
-                        <>
-                          <span className="mt-1 block text-[13px] text-[#717171]">
-                            {review.project}
-                            {review.feature ? ` · ${review.feature}` : ""} · Sent {formatDay(review.startDate)}
-                          </span>
-                          <span className="mt-2 block text-[13px] text-[#717171]">
-                            {owner ? owner.name : "Unknown owner"} · {review.reviewers.length} reviewer{review.reviewers.length === 1 ? "" : "s"}
-                          </span>
-                        </>
-                      }
-                      status={
-                        <span className="inline-flex items-center gap-1.5 text-[13px] text-[#222]">
-                          <span className={cn("size-2 rounded-full", STATUS_META[status].dot)} />
-                          {STATUS_META[status].label}
-                        </span>
-                      }
+                      owner={owner?.name || "Unknown"}
+                      users={reviewers}
+                      status={reviewListStatus(review.id, feedback, review.ownerId)}
                     />
                   </li>
                 )
