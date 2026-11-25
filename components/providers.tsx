@@ -9,7 +9,7 @@ import { useWorkspace } from "@/lib/store"
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <SessionProvider session={null} refetchOnWindowFocus={false}>
+    <SessionProvider refetchOnWindowFocus={false}>
       <TooltipProvider delay={400}>
         <ThemeSync />
         {children}
