@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowLeft, ExternalLink, Link2 } from "lucide-react"
+import { ArrowLeft, ExternalLink, Link2, Pencil } from "lucide-react"
 import { Avatar, PhasePill, ProgressBar, SeverityPill, pageWrap } from "@/components/common"
 import { completionOf, isManager, phaseOf, visibleFeedback } from "@/lib/domain"
 import { windowLabel } from "@/lib/format"
@@ -112,7 +112,18 @@ export function ReviewWorkspace({ id }: { id: string }) {
         <ul className="mt-3 space-y-3">
           {notes.length === 0 ? <li className="text-[14px] text-[#717171]">No feedback yet.</li> : null}
           {notes.map((item) => (
-            <Note key={item.id} item={item} manager={manager} criteriaName={criteria.find((entry) => entry.id === item.criterionId)?.name ?? "Criterion"} author={users.find((person) => person.id === item.authorId)?.name ?? "Someone"} />
+            <Note
+              key={item.id}
+              item={item}
+              manager={manager}
+              canEdit={review.lifecycle === "open" && item.authorId === user.id}
+              criteriaName={criteria.find((entry) => entry.id === item.criterionId)?.name ?? "Criterion"}
+              author={users.find((person) => person.id === item.authorId)?.name ?? "Someone"}
+              criteria={criteria
+                .filter((entry) => entry.active || entry.id === item.criterionId)
+                .sort((a, b) => a.order - b.order)
+                .map((entry) => ({ id: entry.id, name: entry.name }))}
+            />
           ))}
         </ul>
         {review.lifecycle === "open" ? (
@@ -168,45 +179,127 @@ export function ReviewWorkspace({ id }: { id: string }) {
 function Note({
   item,
   manager,
+  canEdit,
   criteriaName,
   author,
+  criteria,
 }: {
   item: Feedback
   manager: boolean
+  canEdit: boolean
   criteriaName: string
   author: string
+  criteria: { id: string; name: string }[]
 }) {
+  const [editing, setEditing] = useState(false)
+  const [criterionId, setCriterionId] = useState(item.criterionId)
+  const [observation, setObservation] = useState(item.observation)
+  const [recommendation, setRecommendation] = useState(item.recommendation)
+  const [severity, setSeverity] = useState<Severity>(item.severity)
+  const [figmaLink, setFigmaLink] = useState(item.figmaLink)
+
+  function startEdit() {
+    setCriterionId(item.criterionId)
+    setObservation(item.observation)
+    setRecommendation(item.recommendation)
+    setSeverity(item.severity)
+    setFigmaLink(item.figmaLink)
+    setEditing(true)
+  }
+
+  async function save() {
+    const result = await saveFeedback(
+      {
+        id: item.id,
+        reviewId: item.reviewId,
+        criterionId,
+        observation,
+        feedback: item.feedback,
+        recommendation,
+        severity,
+        figmaLink,
+      },
+      "submit",
+    )
+    if (!result.ok) {
+      toast.error(result.message)
+      return
+    }
+    toast.success(result.message || "Feedback updated.")
+    setEditing(false)
+  }
+
   return (
     <li className="rounded-[14px] border border-[var(--border)] p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[13px] font-semibold">{author}</span>
-        <span className="chip">{criteriaName}</span>
-        <SeverityPill severity={item.severity} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[13px] font-semibold">{author}</span>
+          {editing ? null : <span className="chip">{criteriaName}</span>}
+          {editing ? null : <SeverityPill severity={item.severity} />}
+        </div>
+        {canEdit && !editing ? (
+          <button type="button" className={cn("grid size-8 shrink-0 place-items-center rounded-full text-[#222] hover:bg-[#F7F7F7]", tap)} aria-label="Edit feedback" onClick={startEdit}>
+            <Pencil className="size-4" />
+          </button>
+        ) : null}
       </div>
-      <p className="mt-2 text-[14px] leading-6">{item.observation}</p>
-      {item.recommendation ? <p className="mt-1 text-[14px] text-[#717171]">Recommendation: {item.recommendation}</p> : null}
-      {item.figmaLink ? (
-        <a href={item.figmaLink} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold underline">Figma comment</a>
-      ) : null}
-      {manager && item.status !== "draft" ? (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {STATUSES.map((status) => (
-            <button
-              key={status}
-              type="button"
-              className={cn("chip capitalize", item.status === status && "chip-on", tap)}
-              onClick={() => {
-                void setFeedbackStatus(item.id, status).then((result) => {
-                  if (!result.ok) toast.error(result.message)
-                })
-              }}
-            >
-              {status}
-            </button>
-          ))}
+      {editing ? (
+        <div>
+          <p className="field-label mt-0">Criterion</p>
+          <div className="flex flex-wrap gap-2">
+            {criteria.map((entry) => (
+              <button key={entry.id} type="button" className={cn("chip", criterionId === entry.id && "chip-on", tap)} onClick={() => setCriterionId(entry.id)}>
+                {entry.name}
+              </button>
+            ))}
+          </div>
+          <label className="field-label">What you noticed</label>
+          <textarea className="field min-h-[72px]" value={observation} onChange={(event) => setObservation(event.target.value)} />
+          <label className="field-label">Recommendation</label>
+          <textarea className="field min-h-[64px]" value={recommendation} onChange={(event) => setRecommendation(event.target.value)} />
+          <label className="field-label">Severity</label>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {(Object.keys(SEVERITY_META) as Severity[]).map((level) => (
+              <button key={level} type="button" className={cn("chip", severity === level && "chip-on", tap)} onClick={() => setSeverity(level)}>
+                {SEVERITY_META[level].label}
+              </button>
+            ))}
+          </div>
+          <label className="field-label">Figma comment link (optional)</label>
+          <input className="field" value={figmaLink} onChange={(event) => setFigmaLink(event.target.value)} placeholder="https://" />
+          <div className="mt-4 flex justify-end gap-2">
+            <button type="button" className={cn("btn", tap)} onClick={() => setEditing(false)}>Cancel</button>
+            <button type="button" className={cn("btn btn-primary", tap)} onClick={() => void save()}>Save</button>
+          </div>
         </div>
       ) : (
-        <p className="mt-2 text-[12px] capitalize text-[#717171]">{item.status}</p>
+        <>
+          <p className="mt-2 text-[14px] leading-6">{item.observation}</p>
+          {item.recommendation ? <p className="mt-1 text-[14px] text-[#717171]">Recommendation: {item.recommendation}</p> : null}
+          {item.figmaLink ? (
+            <a href={item.figmaLink} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold underline">Figma comment</a>
+          ) : null}
+          {manager && item.status !== "draft" ? (
+            <div className="mt-3 flex flex-wrap gap-1">
+              {STATUSES.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  className={cn("chip capitalize", item.status === status && "chip-on", tap)}
+                  onClick={() => {
+                    void setFeedbackStatus(item.id, status).then((result) => {
+                      if (!result.ok) toast.error(result.message)
+                    })
+                  }}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[12px] capitalize text-[#717171]">{item.status}</p>
+          )}
+        </>
       )}
     </li>
   )

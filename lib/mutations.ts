@@ -458,7 +458,8 @@ export function saveFeedback(state: AppState, draft: FeedbackDraft, mode: "draft
       reviewId: review.id,
     })
   }
-  return done(next, mode === "draft" ? "Draft saved." : "Feedback submitted.", record.id)
+  const message = mode === "draft" ? "Draft saved." : existing && existing.status !== "draft" ? "Feedback updated." : "Feedback submitted."
+  return done(next, message, record.id)
 }
 
 export function deleteFeedback(state: AppState, id: string): Mutation {
