@@ -12,7 +12,7 @@ import { formatDay, windowLabel } from "@/lib/format"
 import { PHASE_META, PHASE_ORDER, tap } from "@/lib/presentation"
 import { useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
-import type { Phase } from "@/lib/types"
+import type { Feedback, Phase, Review, User } from "@/lib/types"
 
 const LIST_STATUS: Record<ReviewListStatus, { label: string; chip: string; dot: string }> = {
   pending: { label: "Pending review", chip: "bg-[#F7F7F7] text-[#717171]", dot: "bg-[#999]" },
@@ -41,7 +41,11 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
     })
     .sort((a, b) => a.deadline.localeCompare(b.deadline))
 
+  const sent = filtered.filter((review) => review.ownerId === user.id)
+  const invited = filtered.filter((review) => review.ownerId !== user.id && review.reviewers.some((item) => item.userId === user.id))
+  const other = filtered.filter((review) => review.ownerId !== user.id && !review.reviewers.some((item) => item.userId === user.id))
   const phases = (archive ? PHASE_ORDER.filter((item) => item === "completed" || item === "archived") : PHASE_ORDER.filter((item) => item !== "archived"))
+  const narrowed = Boolean(query || project !== "all" || (archive ? phase !== "all" : listStatus !== "all"))
 
   return (
     <div className={pageWrap()}>
@@ -51,7 +55,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
         description={
           archive
             ? "Closed and archived reviews stay here with their criteria, reviewers, and notes."
-            : "Every design that has been sent. Pending means no one has reviewed it yet. In progress means at least one person has. Completed means at least three people have."
+            : "Sent is a design you asked others to review. Invited is a design someone asked you to review."
         }
         action={
           archive ? undefined : (
@@ -101,16 +105,70 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
         )}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="mt-8">
-          <EmptyState
-            title={query || (archive ? phase !== "all" : listStatus !== "all") || project !== "all" ? "No reviews match" : archive ? "Nothing archived yet" : "No reviews yet"}
-            body={query || (archive ? phase !== "all" : listStatus !== "all") || project !== "all" ? "Try another word, or clear the filters." : "Send a design, add a Figma link, and invite the people who should respond."}
+      <div className="mt-8 space-y-10">
+        <ReviewGroup
+          title="Sent for review"
+          body="Designs you sent to other people."
+          reviews={sent}
+          people={people}
+          archive={archive}
+          feedback={feedback}
+          empty={narrowed ? "None of the reviews you sent match these filters." : "You have not sent a design yet."}
+        />
+        <ReviewGroup
+          title="Invited to review"
+          body="Designs other people asked you to review."
+          reviews={invited}
+          people={people}
+          archive={archive}
+          feedback={feedback}
+          empty={narrowed ? "No invitation matches these filters." : "Nobody has invited you to a review yet."}
+        />
+        {other.length > 0 ? (
+          <ReviewGroup
+            title="Other reviews"
+            body="Designs in the workspace that you did not send and were not invited to."
+            reviews={other}
+            people={people}
+            archive={archive}
+            feedback={feedback}
+            empty=""
           />
-        </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function ReviewGroup({
+  title,
+  body,
+  reviews,
+  people,
+  archive,
+  feedback,
+  empty,
+}: {
+  title: string
+  body: string
+  reviews: Review[]
+  people: Map<string, User>
+  archive: boolean
+  feedback: Feedback[]
+  empty: string
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[18px] font-semibold tracking-tight">{title}</h2>
+        <span className="text-[13px] text-[#717171]">{reviews.length}</span>
+      </div>
+      <p className="mt-1 text-[13px] text-[#717171]">{body}</p>
+      {reviews.length === 0 ? (
+        <p className="mt-4 text-[14px] text-[#717171]">{empty}</p>
       ) : (
-        <ul className="mt-4 divide-y divide-[#EBEBEB]">
-          {filtered.map((review) => {
+        <ul className="mt-2 divide-y divide-[#EBEBEB]">
+          {reviews.map((review) => {
             const owner = people.get(review.ownerId)
             const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
             return (
@@ -137,7 +195,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
           })}
         </ul>
       )}
-    </div>
+    </section>
   )
 }
 
