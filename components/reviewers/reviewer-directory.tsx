@@ -77,7 +77,7 @@ export function ReviewerDirectory() {
               {shown.map((person) => {
                 const sent = reviews.filter((review) => review.ownerId === person.id && review.lifecycle !== "draft")
                 const counts = { pending: 0, in_progress: 0, completed: 0 }
-                for (const review of sent) counts[reviewListStatus(review.id, feedback)] += 1
+                for (const review of sent) counts[reviewListStatus(review.id, feedback, review.ownerId)] += 1
                 return (
                   <tr key={person.id} className="border-t border-[#EBEBEB] align-top">
                     <td className="px-4 py-3 font-medium">{person.name}</td>

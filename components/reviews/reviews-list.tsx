@@ -27,7 +27,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
   const [phase, setPhase] = useState<Phase | "all">("all")
   const [listStatus, setListStatus] = useState<ReviewListStatus | "all">("all")
   const [project, setProject] = useState("all")
-  const [bucket, setBucket] = useState<ReviewBucket>("sent")
+  const [bucket, setBucket] = useState<ReviewBucket>("invited")
   const [day, setDay] = useState<string | null>(null)
   const [today, setToday] = useState<string | null>(null)
   const [allDays, setAllDays] = useState(false)
@@ -45,7 +45,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
   const filtered = reviews
     .filter((review) => canSeeReview(user, review))
     .filter((review) => (archive ? review.lifecycle === "archived" || review.lifecycle === "completed" : review.lifecycle !== "archived" && review.lifecycle !== "draft"))
-    .filter((review) => (archive ? (phase === "all" ? true : phaseOf(review) === phase) : listStatus === "all" ? true : reviewListStatus(review.id, feedback) === listStatus))
+    .filter((review) => (archive ? (phase === "all" ? true : phaseOf(review) === phase) : listStatus === "all" ? true : reviewListStatus(review.id, feedback, review.ownerId) === listStatus))
     .filter((review) => (project === "all" ? true : review.project === project))
     .filter((review) => archive || allDays || (day !== null && review.deadline === day))
     .filter((review) => {
@@ -218,7 +218,7 @@ function ReviewGroup({
                       {review.reviewers.filter((item) => item.status === "completed").length}/{review.reviewers.length || 0} finished · due {formatDay(review.deadline)}
                     </span>
                   </span>
-                  {archive ? <PhasePill phase={phaseOf(review)} /> : <ListStatusPill status={reviewListStatus(review.id, feedback)} />}
+                  {archive ? <PhasePill phase={phaseOf(review)} /> : <ListStatusPill status={reviewListStatus(review.id, feedback, review.ownerId)} />}
                 </Link>
               </li>
             )

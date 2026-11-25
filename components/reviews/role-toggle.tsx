@@ -17,8 +17,8 @@ export function ReviewRoleToggle({
   invited: number
 }) {
   const items: { id: ReviewBucket; label: string; count: number }[] = [
-    { id: "sent", label: "Sent for review", count: sent },
     { id: "invited", label: "Invited to review", count: invited },
+    { id: "sent", label: "Sent for review", count: sent },
   ]
   return (
     <div className="inline-flex max-w-full flex-wrap rounded-xl bg-[#F7F7F7] p-1" role="tablist" aria-label="Review ownership">

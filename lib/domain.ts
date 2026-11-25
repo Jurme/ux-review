@@ -13,23 +13,25 @@ export function phaseOf(review: Review, today = todayISO()): Phase {
   if (review.lifecycle === "archived") return "archived"
   if (review.lifecycle === "completed") return "completed"
   if (review.startDate > today) return "scheduled"
-  const unfinished = review.reviewers.some((reviewer) => reviewer.status !== "completed")
+  const unfinished = review.reviewers.some((reviewer) => reviewer.userId !== review.ownerId && reviewer.status !== "completed")
   if (unfinished && review.deadline < today) return "feedback_pending"
   return "in_progress"
 }
 
+export function assignedReviewers(review: Review) {
+  return review.reviewers.filter((reviewer) => reviewer.userId !== review.ownerId)
+}
+
 export function completionOf(review: Review) {
-  if (review.reviewers.length === 0) return 0
-  const done = review.reviewers.filter((reviewer) => reviewer.status === "completed").length
-  return Math.round((done / review.reviewers.length) * 100)
+  const reviewers = assignedReviewers(review)
+  if (reviewers.length === 0) return 0
+  const done = reviewers.filter((reviewer) => reviewer.status === "completed").length
+  return Math.round((done / reviewers.length) * 100)
 }
 
 export function readyToClose(review: Review) {
-  return (
-    review.lifecycle === "open" &&
-    review.reviewers.length > 0 &&
-    review.reviewers.every((reviewer) => reviewer.status === "completed")
-  )
+  const reviewers = assignedReviewers(review)
+  return review.lifecycle === "open" && reviewers.length > 0 && reviewers.every((reviewer) => reviewer.status === "completed")
 }
 
 export function reviewBucket(userId: string, review: Review): "sent" | "invited" | "other" {
@@ -63,10 +65,10 @@ export function visibleFeedback(review: Review, user: User | null, feedback: Fee
 
 export type ReviewListStatus = "pending" | "in_progress" | "completed"
 
-export function reviewListStatus(reviewId: string, feedback: Feedback[]): ReviewListStatus {
+export function reviewListStatus(reviewId: string, feedback: Feedback[], ownerId?: string): ReviewListStatus {
   const people = new Set(
     feedback
-      .filter((item) => item.reviewId === reviewId && item.status !== "draft")
+      .filter((item) => item.reviewId === reviewId && item.status !== "draft" && item.authorId !== ownerId)
       .map((item) => item.authorId),
   )
   if (people.size >= 3) return "completed"

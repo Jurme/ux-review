@@ -37,7 +37,7 @@ export function CalendarBoard() {
   const [view, setView] = useState<View>("week")
   const [project, setProject] = useState("all")
   const [status, setStatus] = useState<ReviewListStatus | "all">("all")
-  const [bucket, setBucket] = useState<ReviewBucket>("sent")
+  const [bucket, setBucket] = useState<ReviewBucket>("invited")
   const [dragging, setDragging] = useState<string | null>(null)
   const [dropDate, setDropDate] = useState<string | null>(null)
 
@@ -51,7 +51,7 @@ export function CalendarBoard() {
     if (!canSeeReview(user, review)) return false
     if (review.lifecycle === "draft" || review.lifecycle === "archived") return false
     if (project !== "all" && review.project !== project) return false
-    if (status !== "all" && reviewListStatus(review.id, feedback) !== status) return false
+    if (status !== "all" && reviewListStatus(review.id, feedback, review.ownerId) !== status) return false
     return true
   })
   const visible = matched.filter((review) => reviewBucket(user.id, review) === bucket)
@@ -284,7 +284,7 @@ function WeekGrid({
               return (
                 <div key={iso} className="relative">
                   {items.map((item) => {
-                    const state = reviewListStatus(item.review.id, feedback)
+                    const state = reviewListStatus(item.review.id, feedback, item.review.ownerId)
                     const owner = people.get(item.review.ownerId)
                     return (
                       <Link
@@ -394,7 +394,7 @@ function MonthGrid({
                 )}
                 <div className="space-y-1">
                   {items.map((review) => {
-                    const state = reviewListStatus(review.id, feedback)
+                    const state = reviewListStatus(review.id, feedback, review.ownerId)
                     return (
                       <Link
                         key={review.id}

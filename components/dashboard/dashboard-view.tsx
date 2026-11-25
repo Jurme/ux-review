@@ -21,7 +21,7 @@ const STATUS_META: Record<ReviewListStatus, { label: string; dot: string }> = {
 
 export function DashboardView() {
   const { user, users, reviews, feedback, activities, workspace, criteria } = useWorkspace()
-  const [bucket, setBucket] = useState<ReviewBucket>("sent")
+  const [bucket, setBucket] = useState<ReviewBucket>("invited")
   if (!user || !workspace) return null
   const people = new Map(users.map((person) => [person.id, person]))
   const visible = reviews.filter((review) => canSeeReview(user, review) && review.lifecycle !== "draft" && review.lifecycle !== "archived")
@@ -30,13 +30,13 @@ export function DashboardView() {
   const scoped = visible.filter((review) => reviewBucket(user.id, review) === bucket)
   const needsYou = scoped.filter((review) => {
     const mine = assignmentFor(review, user.id)
-    return review.lifecycle === "open" && mine && mine.status !== "completed" && reviewListStatus(review.id, feedback) !== "completed"
+    return review.lifecycle === "open" && review.ownerId !== user.id && mine && mine.status !== "completed" && reviewListStatus(review.id, feedback, review.ownerId) !== "completed"
   })
   const coming = scoped
-    .filter((review) => reviewListStatus(review.id, feedback) !== "completed")
+    .filter((review) => reviewListStatus(review.id, feedback, review.ownerId) !== "completed")
     .sort((a, b) => b.startDate.localeCompare(a.startDate))
     .slice(0, 4)
-  const counts = Object.fromEntries(STATUS_ORDER.map((status) => [status, scoped.filter((review) => reviewListStatus(review.id, feedback) === status).length])) as Record<ReviewListStatus, number>
+  const counts = Object.fromEntries(STATUS_ORDER.map((status) => [status, scoped.filter((review) => reviewListStatus(review.id, feedback, review.ownerId) === status).length])) as Record<ReviewListStatus, number>
   const stats = STATUS_ORDER.map((status) => ({ label: STATUS_META[status].label, value: counts[status] }))
   const line =
     needsYou.length === 0
@@ -123,7 +123,7 @@ export function DashboardView() {
               coming.map((review) => {
                 const owner = people.get(review.ownerId)
                 const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
-                const status = reviewListStatus(review.id, feedback)
+                const status = reviewListStatus(review.id, feedback, review.ownerId)
                 return (
                   <li key={review.id}>
                     <Link href={`/reviews/${review.id}`} className="flex flex-wrap items-center gap-4 py-4">

@@ -1,4 +1,5 @@
 import {
+  assignedReviewers,
   assignmentFor,
   isManager,
   reviewToDraft,
@@ -109,7 +110,9 @@ function reviewersFrom(
 ): ReviewerAssignment[] | string {
   const seen = new Set<string>()
   const reviewers: ReviewerAssignment[] = []
+  const ownerId = draft.ownerId || existing?.ownerId
   for (const reviewer of draft.reviewers) {
+    if (reviewer.userId === ownerId) continue
     if (seen.has(reviewer.userId)) continue
     const member = state.users.find((user) => user.id === reviewer.userId)
     if (!member) return "One of the reviewers is no longer in the workspace."
@@ -377,8 +380,8 @@ export function setReviewerStatus(
     status === "completed" &&
     updated &&
     updated.lifecycle === "open" &&
-    updated.reviewers.length > 0 &&
-    updated.reviewers.every((reviewer) => reviewer.status === "completed")
+    assignedReviewers(updated).length > 0 &&
+    assignedReviewers(updated).every((reviewer) => reviewer.status === "completed")
   ) {
     const closedAt = stamp()
     next = replaceReview(next, { ...updated, lifecycle: "completed", completedAt: closedAt, updatedAt: closedAt })
@@ -398,6 +401,7 @@ export function saveFeedback(state: AppState, draft: FeedbackDraft, mode: "draft
   const review = state.reviews.find((item) => item.id === draft.reviewId)
   if (!review) return same(state, "That review is no longer here.")
   if (review.lifecycle !== "open") return same(state, "This review is closed.")
+  if (user.id === review.ownerId) return same(state, "You can comment on your own design, not review it.")
   if (user.accountStatus !== "active" && user.accountStatus !== "invited") return same(state, "Sign in to leave feedback.")
   const activeCriteria = state.criteria.filter((item) => item.active)
   if (!activeCriteria.length) return same(state, "Add a criterion in Settings before leaving feedback.")

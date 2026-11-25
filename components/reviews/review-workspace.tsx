@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ArrowLeft, ExternalLink, Link2, Pencil } from "lucide-react"
 import { Avatar, PhasePill, ProgressBar, SeverityPill, pageWrap } from "@/components/common"
-import { isManager, phaseOf, visibleFeedback } from "@/lib/domain"
+import { assignedReviewers, isManager, phaseOf, visibleFeedback } from "@/lib/domain"
 import { windowLabel } from "@/lib/format"
 import { SEVERITY_META, tap } from "@/lib/presentation"
 import {
   publishReview,
   remindReviewer,
+  respondToFeedback,
   saveFeedback,
   setFeedbackStatus,
   setLifecycle,
@@ -39,8 +40,10 @@ export function ReviewWorkspace({ id }: { id: string }) {
   const manager = isManager(user, review)
   const notes = visibleFeedback(review, user, feedback).filter((item) => item.status !== "draft")
   const activeCriteria = criteria.filter((item) => item.active).sort((a, b) => a.order - b.order)
+  const assigned = assignedReviewers(review)
   const reviewedIds = new Set(notes.map((item) => item.authorId))
-  const percent = review.reviewers.length === 0 ? 0 : Math.round((review.reviewers.filter((item) => reviewedIds.has(item.userId)).length / review.reviewers.length) * 100)
+  const percent = assigned.length === 0 ? 0 : Math.round((assigned.filter((item) => reviewedIds.has(item.userId)).length / assigned.length) * 100)
+  const ownsDesign = user.id === review.ownerId
   const links = [review.figmaUrl, ...review.referenceUrls].filter(Boolean)
 
   async function act(result: Promise<{ ok: boolean; message?: string }>) {
@@ -116,7 +119,8 @@ export function ReviewWorkspace({ id }: { id: string }) {
               key={item.id}
               item={item}
               manager={manager}
-              canEdit={review.lifecycle === "open" && item.authorId === user.id}
+              canEdit={review.lifecycle === "open" && item.authorId === user.id && !ownsDesign}
+              canComment={review.lifecycle === "open" && ownsDesign}
               criteriaName={criteria.find((entry) => entry.id === item.criterionId)?.name ?? "Criterion"}
               author={users.find((person) => person.id === item.authorId)?.name ?? "Someone"}
               criteria={criteria
@@ -126,8 +130,11 @@ export function ReviewWorkspace({ id }: { id: string }) {
             />
           ))}
         </ul>
-        {review.lifecycle === "open" ? (
+        {review.lifecycle === "open" && !ownsDesign ? (
           <PointForm reviewId={review.id} criteria={activeCriteria.map((item) => ({ id: item.id, name: item.name }))} />
+        ) : null}
+        {review.lifecycle === "open" && ownsDesign ? (
+          <p className="mt-4 text-[13px] text-[#717171]">You sent this design. Comment on the feedback instead of reviewing it.</p>
         ) : null}
       </section>
 
@@ -137,11 +144,11 @@ export function ReviewWorkspace({ id }: { id: string }) {
           <span className="text-[14px] font-semibold">{percent}%</span>
         </div>
         <div className="mt-2"><ProgressBar value={percent} /></div>
-        {review.reviewers.length === 0 ? (
-          <p className="mt-3 text-[14px] text-[#717171]">Anyone with the link can review.</p>
+        {assigned.length === 0 ? (
+          <p className="mt-3 text-[14px] text-[#717171]">No reviewers are assigned.</p>
         ) : (
           <ul className="mt-4 divide-y divide-[var(--border)]">
-            {review.reviewers.map((assignment) => {
+            {assigned.map((assignment) => {
               const person = users.find((entry) => entry.id === assignment.userId)
               const count = notes.filter((item) => item.authorId === assignment.userId).length
               const reviewed = count > 0
@@ -172,6 +179,7 @@ function Note({
   item,
   manager,
   canEdit,
+  canComment,
   criteriaName,
   author,
   criteria,
@@ -179,6 +187,7 @@ function Note({
   item: Feedback
   manager: boolean
   canEdit: boolean
+  canComment: boolean
   criteriaName: string
   author: string
   criteria: { id: string; name: string }[]
@@ -290,7 +299,48 @@ function Note({
           ) : null}
         </>
       )}
+      {editing ? null : <OwnerComment item={item} canComment={canComment} />}
     </li>
+  )
+}
+
+function OwnerComment({ item, canComment }: { item: Feedback; canComment: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState(item.ownerResponse)
+
+  async function save() {
+    const result = await respondToFeedback(item.id, text)
+    if (!result.ok) {
+      toast.error(result.message)
+      return
+    }
+    toast.success(result.message || "Comment saved.")
+    setOpen(false)
+  }
+
+  if (!item.ownerResponse && !canComment) return null
+
+  return (
+    <div className="mt-3 border-t border-[#EBEBEB] pt-3">
+      {item.ownerResponse && !open ? (
+        <p className="text-[14px] leading-5"><span className="font-medium">Comment. </span>{item.ownerResponse}</p>
+      ) : null}
+      {canComment && !open ? (
+        <button type="button" className={cn("mt-2 text-[13px] font-semibold", tap)} onClick={() => { setText(item.ownerResponse); setOpen(true) }}>
+          {item.ownerResponse ? "Edit comment" : "Leave a comment"}
+        </button>
+      ) : null}
+      {open ? (
+        <div>
+          <label className="field-label mt-0">Comment</label>
+          <textarea className="field min-h-[64px]" value={text} onChange={(event) => setText(event.target.value)} />
+          <div className="mt-3 flex justify-end gap-2">
+            <button type="button" className={cn("btn", tap)} onClick={() => setOpen(false)}>Cancel</button>
+            <button type="button" className={cn("btn btn-primary", tap)} onClick={() => void save()}>Save comment</button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
