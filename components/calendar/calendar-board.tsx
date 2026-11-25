@@ -10,7 +10,7 @@ import { SendDesignLink } from "@/components/reviews/create-review"
 import { ReviewRoleToggle, type ReviewBucket } from "@/components/reviews/role-toggle"
 import { canSeeReview, isManager, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
 import { addDays, dateInTimeZone, formatDay, formatLongDate, formatMonth, parseISODate, startOfWeek, toISODate } from "@/lib/format"
-import { tap } from "@/lib/presentation"
+import { cardHover, tap } from "@/lib/presentation"
 import { rescheduleReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import type { Feedback, Review } from "@/lib/types"
@@ -316,6 +316,7 @@ function WeekGrid({
                         }}
                         className={cn(
                           "pointer-events-auto absolute overflow-hidden rounded-lg border px-2 py-1 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+                          cardHover,
                           STATUS_META[state].chip,
                           dragging === item.review.id && "opacity-60",
                         )}
@@ -417,7 +418,7 @@ function MonthGrid({
                           click.preventDefault()
                           dragged.current = false
                         }}
-                        className={cn("block truncate rounded-md border px-1.5 py-1 text-[11px] font-medium", STATUS_META[state].chip)}
+                        className={cn("block truncate rounded-md border px-1.5 py-1 text-[11px] font-medium", cardHover, STATUS_META[state].chip)}
                       >
                         {review.title}
                       </Link>

@@ -5,7 +5,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog, PageHeader, pageWrap } from "@/components/common"
 import { formatDay } from "@/lib/format"
-import { tap } from "@/lib/presentation"
+import { rowHover, tap } from "@/lib/presentation"
 import { deleteReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import type { Review } from "@/lib/types"
@@ -49,7 +49,7 @@ export function ArchiveList() {
           {archived.map((review) => {
             const owner = people.get(review.ownerId)
             return (
-              <li key={review.id} className="flex items-center justify-between gap-4 py-4">
+              <li key={review.id} className={cn("flex items-center justify-between gap-4 py-3", rowHover)}>
                 <Link href={`/reviews/${review.id}`} className="min-w-0">
                   <span className="block font-medium">{review.title}</span>
                   <span className="mt-1 block text-[13px] text-[#717171]">
@@ -59,7 +59,7 @@ export function ArchiveList() {
                 </Link>
                 <button
                   type="button"
-                  className={cn("shrink-0 text-[13px] font-medium text-[#FF385C]", tap)}
+                  className={cn("shrink-0 rounded-lg px-2 py-1 text-[13px] font-medium text-[#FF385C] transition-colors hover:bg-[#FFE3E8]", tap)}
                   onClick={() => setPending(review)}
                 >
                   Delete

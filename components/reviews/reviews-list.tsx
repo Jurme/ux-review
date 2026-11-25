@@ -113,7 +113,7 @@ export function ReviewsList() {
           </button>
           <button
             type="button"
-            className={cn("h-10 rounded-xl px-3 text-[13px] font-medium", tap, allDays ? "bg-[#222] text-white" : "text-[#717171]")}
+            className={cn("h-10 rounded-xl px-3 text-[13px] font-medium transition-colors duration-150", tap, allDays ? "bg-[#222] text-white hover:bg-black" : "text-[#717171] hover:bg-[#F7F7F7] hover:text-[#222]")}
             onClick={() => setAllDays(true)}
           >
             All days

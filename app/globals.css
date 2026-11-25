@@ -82,6 +82,7 @@
   --sidebar-accent-foreground: #222222;
   --sidebar-border: #ebebeb;
   --sidebar-ring: #222222;
+  --hover: #f3f3f3;
 }
 
 :root[data-theme="dark"] [class*="text-[#222]"] {
@@ -128,6 +129,7 @@
   --sidebar-accent-foreground: #f2f2f2;
   --sidebar-border: #303030;
   --sidebar-ring: #ff385c;
+  --hover: #2a2a2a;
   color-scheme: dark;
 }
 
@@ -205,6 +207,18 @@
   border: 1px solid var(--border);
   background: var(--background);
   font-weight: 600;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  &:hover:not(:disabled) {
+    background: var(--hover);
+    border-color: #d6d6d6;
+  }
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
 }
 
 @utility btn-sm {
@@ -217,6 +231,11 @@
   background: #ff385c;
   border-color: #ff385c;
   color: white;
+  &:hover:not(:disabled) {
+    background: #e31c5f;
+    border-color: #e31c5f;
+    box-shadow: 0 6px 16px rgba(255, 56, 92, 0.28);
+  }
 }
 
 @utility chip {
@@ -228,12 +247,21 @@
   border-radius: 99px;
   font-size: 13px;
   font-weight: 500;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  &:hover {
+    background: var(--hover);
+  }
 }
 
 @utility chip-on {
   border-color: var(--foreground);
   background: var(--canvas);
   font-weight: 600;
+  &:hover {
+    background: var(--canvas);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
 }
 
 /* Native select arrows sit on the border. Draw one 8px in from the right edge. */

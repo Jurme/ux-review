@@ -164,14 +164,14 @@ export function LoginScreen() {
       <div className="grid grid-cols-2 rounded-xl bg-[#F7F7F7] p-1">
         <button
           type="button"
-          className={cn("h-10 rounded-lg text-[14px] font-medium", mode === "sign-in" ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#717171]", tap)}
+          className={cn("h-10 rounded-lg text-[14px] font-medium transition-colors duration-150", mode === "sign-in" ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#717171] hover:bg-white/70 hover:text-[#222]", tap)}
           onClick={() => { setMode("sign-in"); setNotice("") }}
         >
           Sign in
         </button>
         <button
           type="button"
-          className={cn("h-10 rounded-lg text-[14px] font-medium", mode === "sign-up" ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#717171]", tap)}
+          className={cn("h-10 rounded-lg text-[14px] font-medium transition-colors duration-150", mode === "sign-up" ? "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#717171] hover:bg-white/70 hover:text-[#222]", tap)}
           onClick={() => { setMode("sign-up"); setNotice("") }}
         >
           Sign up

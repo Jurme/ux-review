@@ -91,7 +91,7 @@ export function DashboardView() {
         <section>
           <div className="flex items-baseline justify-between">
             <h2 className="text-[18px] font-semibold tracking-tight">Open reviews</h2>
-            <Link href="/reviews" className="text-[13px] font-medium text-[#222] underline-offset-4 hover:underline">
+            <Link href="/reviews" className="text-[13px] font-medium text-[#222] underline-offset-4 transition-colors hover:text-[#FF385C] hover:underline">
               All reviews
             </Link>
           </div>
@@ -148,7 +148,7 @@ export function DashboardView() {
                   <li key={activity.id} className="flex gap-3">
                     <span className="mt-1 size-2 shrink-0 rounded-full bg-[#FF385C]" />
                     <span>
-                      <Link href={href} className="text-[14px] leading-5 text-[#222] hover:underline">
+                      <Link href={href} className="text-[14px] leading-5 text-[#222] underline-offset-4 transition-colors hover:text-[#FF385C] hover:underline">
                         {activity.message}
                       </Link>
                       <span className="mt-0.5 block text-[12px] text-[#717171]">

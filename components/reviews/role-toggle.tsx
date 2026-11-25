@@ -31,7 +31,7 @@ export function ReviewRoleToggle({
             role="tab"
             aria-selected={selected}
             onClick={() => onChange(item.id)}
-            className={cn("h-9 rounded-lg px-3 text-[13px] font-medium", tap, selected ? "bg-white text-[#222] shadow-sm" : "text-[#717171]")}
+            className={cn("h-9 rounded-lg px-3 text-[13px] font-medium transition-colors duration-150", tap, selected ? "bg-white text-[#222] shadow-sm" : "text-[#717171] hover:bg-white/80 hover:text-[#222]")}
           >
             {item.label}
             <span className={cn("ml-2 text-[12px]", selected ? "text-[#717171]" : "text-[#999]")}>{item.count}</span>

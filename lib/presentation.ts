@@ -3,6 +3,12 @@ import type { Phase, ReviewerStatus, Severity } from "@/lib/types"
 export const tap =
   "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#222]"
 
+export const rowHover =
+  "-mx-2 rounded-xl px-2 transition-colors duration-150 hover:bg-[var(--hover)]"
+
+export const cardHover =
+  "transition duration-150 hover:-translate-y-px hover:shadow-[0_6px_16px_rgba(0,0,0,0.1)]"
+
 export const PHASE_META: Record<
   Phase,
   { label: string; description: string; chip: string; dot: string; tint: string }

@@ -15,7 +15,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { PRIORITIES } from "@/lib/constants"
-import { tap } from "@/lib/presentation"
+import { rowHover, tap } from "@/lib/presentation"
 import {
   deleteCriterion,
   duplicateCriterion,
@@ -79,7 +79,7 @@ export function CriteriaManager() {
           {shown.map((item, index) => {
             const used = reviews.filter((review) => review.criteriaIds.includes(item.id)).length
             return (
-              <li key={item.id} className="flex flex-wrap items-start gap-4 py-4">
+              <li key={item.id} className={cn("flex flex-wrap items-start gap-4 py-3", rowHover)}>
                 <span className="w-8 pt-1 text-[13px] text-[#717171]">{String(item.order).padStart(2, "0")}</span>
                 <button type="button" onClick={() => open(item)} className={cn("min-w-0 flex-1 text-left", tap)}>
                   <span className="flex flex-wrap items-center gap-2">

@@ -1,6 +1,8 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
 import { AvatarStack, ProgressBar } from "@/components/common"
+import { rowHover } from "@/lib/presentation"
+import { cn } from "@/lib/utils"
 import type { User } from "@/lib/types"
 
 export function ReviewSummary({
@@ -21,7 +23,7 @@ export function ReviewSummary({
   status: ReactNode
 }) {
   return (
-    <Link href={href} className="flex items-start justify-between gap-4 py-4">
+    <Link href={href} className={cn("flex items-start justify-between gap-4 py-3", rowHover)}>
       <span className="min-w-0">
         <span className="block font-medium">{title}</span>
         {detail}

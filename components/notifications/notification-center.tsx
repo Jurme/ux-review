@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { timeAgo } from "@/lib/format"
 import { markAllRead, markRead, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
-import { tap } from "@/lib/presentation"
+import { rowHover, tap } from "@/lib/presentation"
 
 export function NotificationCenter() {
   const { notifications, user } = useWorkspace()
@@ -34,7 +34,7 @@ export function NotificationCenter() {
                 <Link
                   href={href}
                   onClick={() => { if (!item.read) void markRead(item.id) }}
-                  className={cn("flex gap-3 py-4", tap)}
+                  className={cn("flex gap-3 py-3", rowHover, tap)}
                 >
                   <span className={cn("mt-2 size-2 shrink-0 rounded-full", item.read ? "bg-transparent" : "bg-[#FF385C]")} />
                   <span>
