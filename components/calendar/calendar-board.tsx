@@ -9,7 +9,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { SendDesignLink } from "@/components/reviews/create-review"
 import { ReviewRoleToggle, type ReviewBucket } from "@/components/reviews/role-toggle"
 import { canSeeReview, isManager, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
-import { addDays, formatDay, formatMonth, startOfWeek, todayISO, toISODate } from "@/lib/format"
+import { addDays, formatDay, formatLongDate, formatMonth, startOfWeek, todayISO, toISODate } from "@/lib/format"
 import { tap } from "@/lib/presentation"
 import { rescheduleReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -85,7 +85,7 @@ export function CalendarBoard() {
   }
 
   const weekStart = startOfWeek(focus)
-  const label = view === "month" ? formatMonth(focus) : view === "day" ? formatWeekTitle(focus, focus) : formatWeekTitle(weekStart, addDays(weekStart, 6))
+  const label = view === "month" ? formatMonth(focus) : view === "day" ? formatLongDate(focus) : formatWeekTitle(weekStart, addDays(weekStart, 6))
 
   return (
     <div className={pageWrap("max-w-[1280px]")}>
@@ -107,16 +107,16 @@ export function CalendarBoard() {
             <button
               key={item}
               type="button"
-              onClick={() => setView(item)}
+              onClick={() => {
+                if (item === "day") setCursor(new Date())
+                setView(item)
+              }}
               className={cn("h-8 rounded-lg px-3 text-[13px] font-medium capitalize", tap, view === item ? "bg-white text-[#222] shadow-sm" : "text-[#717171]")}
             >
               {item}
             </button>
           ))}
         </div>
-        <button type="button" className={cn(buttonVariants({ variant: "outline" }), "h-10 rounded-xl")} onClick={() => setCursor(new Date())}>
-          Today
-        </button>
         <button type="button" className={cn(buttonVariants({ variant: "outline", size: "icon" }), "rounded-xl")} onClick={() => shift(-1)} aria-label="Previous">
           <ChevronLeft />
         </button>
