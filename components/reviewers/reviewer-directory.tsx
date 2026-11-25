@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { toast } from "sonner"
-import { EmptyState, PageHeader, pageWrap } from "@/components/common"
+import { ConfirmDialog, EmptyState, PageHeader, pageWrap } from "@/components/common"
 import { Input } from "@/components/ui/input"
 import { reviewListStatus } from "@/lib/domain"
 import { tap } from "@/lib/presentation"
@@ -15,6 +15,8 @@ export function ReviewerDirectory() {
   const [query, setQuery] = useState("")
   const [email, setEmail] = useState("")
   const [pending, setPending] = useState(false)
+  const [removing, setRemoving] = useState<{ id: string; name: string; role: Role } | null>(null)
+  const [busy, setBusy] = useState(false)
   if (!user) return null
 
   const signedIn = users.filter((person) => person.accountStatus === "active")
@@ -32,6 +34,18 @@ export function ReviewerDirectory() {
       else toast.error(result.message)
     }
     if (result.ok) setEmail("")
+  }
+
+  async function confirmRemove() {
+    if (!removing) return
+    setBusy(true)
+    const result = await removeMember(removing.id)
+    setBusy(false)
+    if (result.message) {
+      if (result.ok) toast.success(result.message)
+      else toast.error(result.message)
+    }
+    if (result.ok) setRemoving(null)
   }
 
   return (
@@ -114,14 +128,7 @@ export function ReviewerDirectory() {
                           <button
                             type="button"
                             className={cn("text-[13px] text-[#D93B3B]", tap)}
-                            onClick={() => {
-                              void removeMember(person.id).then((result) => {
-                                if (result.message) {
-                                  if (result.ok) toast.success(result.message)
-                                  else toast.error(result.message)
-                                }
-                              })
-                            }}
+                            onClick={() => setRemoving({ id: person.id, name: person.name, role: person.role })}
                           >
                             Remove
                           </button>
@@ -135,6 +142,14 @@ export function ReviewerDirectory() {
           </table>
         </div>
       )}
+      <ConfirmDialog
+        open={removing !== null}
+        title={removing ? `Remove ${removing.name}?` : "Remove this person?"}
+        body={removing?.role === "admin" ? "This admin will leave the workspace. They can be added again after they sign in." : "This reviewer will leave the workspace. They can be added again after they sign in."}
+        confirmLabel={busy ? "Removing…" : "Remove"}
+        onConfirm={() => void confirmRemove()}
+        onClose={() => { if (!busy) setRemoving(null) }}
+      />
     </div>
   )
 }
