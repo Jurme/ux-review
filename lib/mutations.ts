@@ -627,6 +627,7 @@ export function inviteMember(state: AppState, input: { name: string; email: stri
     role: "member" as const,
     title: "",
     accountStatus: "active" as const,
+    theme: "light" as const,
   }
   return done(
     { ...state, users: [...state.users, user] },
@@ -733,8 +734,15 @@ export function removeProject(state: AppState, name: string): Mutation {
 }
 
 export function setTheme(state: AppState, theme: "light" | "dark"): Mutation {
-  if (!actor(state)) return same(state, "Sign in to change the appearance.")
-  return done({ ...state, workspace: { ...state.workspace, theme } })
+  const user = actor(state)
+  if (!user) return same(state, "Sign in to change the appearance.")
+  return done(
+    {
+      ...state,
+      users: state.users.map((item) => (item.id === user.id ? { ...item, theme } : item)),
+    },
+    theme === "dark" ? "Dark mode is on for you." : "Light mode is on for you.",
+  )
 }
 
 export function markRead(state: AppState, id: string): Mutation {
@@ -752,7 +760,7 @@ export function loadSample(state: AppState): Mutation {
   const fresh = createSeed()
   const swap = (id: string) => (id === "user_tashi" ? me.id : id)
   const users = [
-    { ...me, role: "admin" as const },
+    { ...me, role: "admin" as const, theme: me.theme ?? state.workspace.theme },
     ...fresh.users.filter((user) => user.id !== "user_tashi" && user.email.toLowerCase() !== me.email.toLowerCase()),
   ]
   return done(

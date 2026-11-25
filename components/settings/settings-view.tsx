@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { REMINDER_OPTIONS, TIMEZONES } from "@/lib/constants"
 import { tap } from "@/lib/presentation"
 import { signOut } from "next-auth/react"
+import { appearanceOf } from "@/lib/domain"
 import { addProject, removeProject, renameProject, resetDemo, setTheme, updateProfile, updateWorkspace, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -154,12 +155,12 @@ function General({ confirm, setConfirm }: { confirm: boolean; setConfirm: (value
         <h2 className="text-[18px] font-semibold">Appearance</h2>
         <div className="mt-3 flex gap-2">
           {(["light", "dark"] as const).map((theme) => (
-            <button key={theme} type="button" className={cn("chip capitalize", workspace.theme === theme && "chip-on", tap)} onClick={() => setTheme(theme)}>
+            <button key={theme} type="button" className={cn("chip capitalize", appearanceOf(user, workspace) === theme && "chip-on", tap)} onClick={() => setTheme(theme)}>
               {theme}
             </button>
           ))}
         </div>
-        <p className="mt-3 text-[13px] text-[#717171]">Everyone on a review can read each other’s notes. A draft stays with the person who wrote it until they submit it.</p>
+        <p className="mt-3 text-[13px] text-[#717171]">Light or dark follows this account. Other people keep their own.</p>
       </div>
       <form
         key={user.id}

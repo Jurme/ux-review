@@ -31,6 +31,7 @@ export type User = {
   role: Role
   title: string
   accountStatus: AccountStatus
+  theme?: "light" | "dark"
 }
 
 export type Workspace = {

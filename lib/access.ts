@@ -25,6 +25,7 @@ export function emptyWorkspace(profile: Profile): AppState {
     role: "admin",
     title: "",
     accountStatus: "active",
+    theme: "light",
   }
   return {
     version: 1,
@@ -62,6 +63,7 @@ export function bindSession(
       role: "member",
       title: "",
       accountStatus: "active",
+      theme: "light",
     }
     return {
       ok: true,

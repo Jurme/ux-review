@@ -40,6 +40,13 @@ export function reviewBucket(userId: string, review: Review): "sent" | "invited"
   return "other"
 }
 
+export function appearanceOf(
+  user: { theme?: "light" | "dark" } | null | undefined,
+  workspace: { theme?: "light" | "dark" } | null | undefined,
+) {
+  return user?.theme ?? workspace?.theme ?? "light"
+}
+
 export function isManager(user: User | null | undefined, review: Review) {
   if (!user) return false
   return user.role === "admin" || user.id === review.ownerId

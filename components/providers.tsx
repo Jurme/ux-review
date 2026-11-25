@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react"
 import { SessionProvider } from "next-auth/react"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { appearanceOf } from "@/lib/domain"
 import { useWorkspace } from "@/lib/store"
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -12,16 +13,22 @@ export function Providers({ children }: { children: ReactNode }) {
       <TooltipProvider delay={400}>
         <ThemeSync />
         {children}
-        <Toaster position="bottom-center" />
+        <ThemedToaster />
       </TooltipProvider>
     </SessionProvider>
   )
 }
 
 function ThemeSync() {
-  const { workspace } = useWorkspace()
+  const { user, workspace } = useWorkspace()
+  const theme = appearanceOf(user, workspace)
   useEffect(() => {
-    document.documentElement.dataset.theme = workspace?.theme ?? "light"
-  }, [workspace?.theme])
+    document.documentElement.dataset.theme = theme
+  }, [theme])
   return null
+}
+
+function ThemedToaster() {
+  const { user, workspace } = useWorkspace()
+  return <Toaster theme={appearanceOf(user, workspace)} position="bottom-center" />
 }
