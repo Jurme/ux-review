@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { SendDesignLink } from "@/components/reviews/create-review"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react"
 import { AvatarStack, PageHeader, PhasePill, pageWrap, ProgressBar } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
@@ -26,20 +26,26 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
   const [phase, setPhase] = useState<Phase | "all">("all")
   const [listStatus, setListStatus] = useState<ReviewListStatus | "all">("all")
   const [project, setProject] = useState("all")
-  const [day, setDay] = useState(todayISO)
+  const [day, setDay] = useState<string | null>(null)
+  const [today, setToday] = useState<string | null>(null)
   const [allDays, setAllDays] = useState(false)
+  useEffect(() => {
+    const current = todayISO()
+    setToday(current)
+    setDay((value) => value ?? current)
+  }, [])
   const people = useMemo(() => new Map(users.map((person) => [person.id, person])), [users])
   if (!user || !workspace) return null
 
-  const today = todayISO()
   const projects = [...workspace.projects].sort((a, b) => a.localeCompare(b))
-  const showingToday = !archive && !allDays && day === today
+  const showingToday = !archive && !allDays && today !== null && day === today
+  const waitingForDay = !archive && !allDays && day === null
   const filtered = reviews
     .filter((review) => canSeeReview(user, review))
     .filter((review) => (archive ? review.lifecycle === "archived" || review.lifecycle === "completed" : review.lifecycle !== "archived" && review.lifecycle !== "draft"))
     .filter((review) => (archive ? (phase === "all" ? true : phaseOf(review) === phase) : listStatus === "all" ? true : reviewListStatus(review.id, feedback) === listStatus))
     .filter((review) => (project === "all" ? true : review.project === project))
-    .filter((review) => (archive || allDays ? true : review.deadline === day))
+    .filter((review) => archive || allDays || (day !== null && review.deadline === day))
     .filter((review) => {
       if (!archive) return true
       const haystack = `${review.title} ${review.project} ${review.feature} ${review.description}`.toLowerCase()
@@ -52,7 +58,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
   const other = filtered.filter((review) => review.ownerId !== user.id && !review.reviewers.some((item) => item.userId === user.id))
   const phases = PHASE_ORDER.filter((item) => item === "completed" || item === "archived")
   const narrowed = Boolean(project !== "all" || (archive ? phase !== "all" || query : listStatus !== "all" || !allDays))
-  const dayLabel = day === today ? `Today, ${formatDay(day)}` : formatWeekday(parseISODate(day))
+  const dayLabel = !day || !today || day === today ? (day ? `Today, ${formatDay(day)}` : "Today") : formatWeekday(parseISODate(day))
 
   return (
     <div className={pageWrap()}>
@@ -88,8 +94,10 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
             type="button"
             className={cn(buttonVariants({ variant: "outline" }), "h-10 rounded-xl", showingToday && "border-[#222]")}
             onClick={() => {
+              const current = todayISO()
               setAllDays(false)
-              setDay(today)
+              setToday(current)
+              setDay(current)
             }}
           >
             Today
@@ -99,7 +107,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
             className={cn(buttonVariants({ variant: "outline", size: "icon" }), "rounded-xl")}
             onClick={() => {
               setAllDays(false)
-              setDay((current) => addDaysISO(current, -1))
+              setDay((current) => addDaysISO(current ?? todayISO(), -1))
             }}
             aria-label="Previous day"
           >
@@ -110,7 +118,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
             className={cn(buttonVariants({ variant: "outline", size: "icon" }), "rounded-xl")}
             onClick={() => {
               setAllDays(false)
-              setDay((current) => addDaysISO(current, 1))
+              setDay((current) => addDaysISO(current ?? todayISO(), 1))
             }}
             aria-label="Next day"
           >
@@ -162,7 +170,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
           people={people}
           archive={archive}
           feedback={feedback}
-          empty={sentEmpty(archive, narrowed, showingToday, allDays)}
+          empty={waitingForDay ? "" : sentEmpty(archive, narrowed, showingToday, allDays)}
         />
         <ReviewGroup
           title="Invited to review"
@@ -171,7 +179,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
           people={people}
           archive={archive}
           feedback={feedback}
-          empty={invitedEmpty(archive, narrowed, showingToday, allDays)}
+          empty={waitingForDay ? "" : invitedEmpty(archive, narrowed, showingToday, allDays)}
         />
         {other.length > 0 ? (
           <ReviewGroup
