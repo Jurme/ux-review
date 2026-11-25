@@ -142,14 +142,15 @@ function SendForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[720px] px-6 py-8 md:px-0 md:py-2">
-      <h1 className="text-[28px] font-bold tracking-tight">Send a design for review</h1>
+    <div className="mx-auto w-full max-w-[1180px] px-5 pt-14 pb-8 md:px-10 md:pt-16 md:pb-10">
+      <div className="max-w-[720px]">
+      <h1 className="text-[28px] font-semibold tracking-tight text-[#222]">Send a design for review</h1>
       <p className="mt-1 text-[14px] text-[#717171]">
         {due === today
           ? "The review is due today, stamped with the time you send it."
           : `Due ${formatDay(due)}. It is sent today and stays open until that day.`}
       </p>
-      <form className="mt-6 rounded-[20px] border border-[#EBEBEB] bg-white p-6 shadow-[0_2px_12px_rgba(0,0,0,0.06)]" autoComplete="off" onSubmit={(event) => event.preventDefault()}>
+      <form className="mt-6" autoComplete="off" onSubmit={(event) => event.preventDefault()}>
         <label className="mt-1 block text-[13px] font-semibold">Project</label>
         <select className="field" name="ux-review-project" autoComplete="off" value={project} onChange={(event) => setProject(event.target.value)}>
           <option value="">Choose a project</option>
@@ -262,6 +263,7 @@ function SendForm() {
           </button>
         </div>
       </form>
+      </div>
     </div>
   )
 }
