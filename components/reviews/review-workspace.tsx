@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { ArrowLeft, ExternalLink, Link2, Pencil } from "lucide-react"
-import { Avatar, PhasePill, ProgressBar, SeverityPill, pageWrap } from "@/components/common"
+import { Avatar, PhasePill, SeverityPill, pageWrap } from "@/components/common"
 import { assignedReviewers, isManager, phaseOf, visibleFeedback } from "@/lib/domain"
 import { windowLabel } from "@/lib/format"
 import { SEVERITY_META, tap } from "@/lib/presentation"
@@ -63,117 +63,128 @@ export function ReviewWorkspace({ id }: { id: string }) {
     }
   }
 
+  const reviewedCount = assigned.filter((item) => reviewedIds.has(item.userId)).length
+
   return (
-    <div className={pageWrap("max-w-[920px]")}>
-      <button type="button" className={cn("mb-4 inline-flex items-center gap-1 text-[13px] font-semibold text-[#717171]", tap)} onClick={() => router.push("/reviews")}>
+    <div className={pageWrap("max-w-[1120px]")}>
+      <button type="button" className={cn("mb-5 inline-flex items-center gap-1 text-[13px] font-medium text-[#717171]", tap)} onClick={() => router.push("/reviews")}>
         <ArrowLeft className="size-4" /> All reviews
       </button>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[28px] font-bold tracking-tight">{review.title}</h1>
-          <p className="mt-1 text-[14px] text-[#717171]">
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-[34px] font-bold tracking-tight md:text-[40px]">{review.title}</h1>
+          <p className="mt-2 text-[14px] text-[#717171]">
             {[review.project, review.feature, owner?.name, windowLabel(review.startDate, review.deadline)].filter(Boolean).join(" · ")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <PhasePill phase={phase} />
-          <button type="button" className={cn("btn btn-sm", tap)} onClick={copyLink}><Link2 className="mr-1 inline size-3.5" />Copy review link</button>
           {manager && review.lifecycle === "draft" ? (
-            <button type="button" className={cn("btn btn-sm btn-primary", tap)} onClick={() => act(publishReview(review.id))}>Publish</button>
+            <button type="button" className={cn(solidBtn, tap)} onClick={() => act(publishReview(review.id))}>Publish</button>
           ) : null}
           {manager && review.lifecycle === "open" ? (
-            <button type="button" className={cn("btn btn-sm", tap)} onClick={() => act(setLifecycle(review.id, "completed"))}>Close review</button>
+            <button type="button" className={cn(solidBtn, tap)} onClick={() => act(setLifecycle(review.id, "completed"))}>Close review</button>
           ) : null}
           {manager && (review.lifecycle === "completed" || review.lifecycle === "archived") ? (
-            <button type="button" className={cn("btn btn-sm btn-primary", tap)} onClick={() => act(setLifecycle(review.id, "open"))}>Reopen</button>
-          ) : null}
-          {manager && review.lifecycle !== "draft" && review.lifecycle !== "archived" ? (
-            <button type="button" className={cn("btn btn-sm", tap)} onClick={() => act(setLifecycle(review.id, "archived"))}>Archive</button>
+            <button type="button" className={cn(solidBtn, tap)} onClick={() => act(setLifecycle(review.id, "open"))}>Reopen</button>
           ) : null}
         </div>
       </div>
 
-      {links.length === 0 ? (
-        <p className="mt-6 text-[14px] text-[#717171]">No Figma link yet.</p>
-      ) : (
-        <ul className="mt-6 flex flex-col gap-2">
-          {links.map((link, index) => (
-            <li key={`${link}-${index}`}>
-              <a href={link} target="_blank" rel="noreferrer" className={cn("inline-flex items-center gap-1 text-[14px] font-semibold", tap)}>
-                {links.length > 1 ? `Open design ${index + 1} in Figma` : "Open in Figma"}
-                <ExternalLink className="size-3.5" />
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {review.description ? <p className="mt-5 text-[15px] leading-6">{review.description}</p> : null}
-
-      <section className="mt-8">
-        <h2 className="text-[18px] font-semibold">Feedback</h2>
-        <ul className="mt-3 space-y-3">
-          {notes.length === 0 ? <li className="text-[14px] text-[#717171]">No feedback yet.</li> : null}
-          {notes.map((item) => (
-            <Note
-              key={item.id}
-              item={item}
-              manager={manager}
-              canEdit={review.lifecycle === "open" && item.authorId === user.id && !ownsDesign}
-              canComment={review.lifecycle === "open" && ownsDesign}
-              criteriaName={criteria.find((entry) => entry.id === item.criterionId)?.name ?? "Criterion"}
-              author={users.find((person) => person.id === item.authorId)?.name ?? "Someone"}
-              criteria={criteria
-                .filter((entry) => entry.active || entry.id === item.criterionId)
-                .sort((a, b) => a.order - b.order)
-                .map((entry) => ({ id: entry.id, name: entry.name }))}
-            />
-          ))}
-        </ul>
-        {review.lifecycle === "open" && !ownsDesign ? (
-          <PointForm reviewId={review.id} criteria={activeCriteria.map((item) => ({ id: item.id, name: item.name }))} />
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <PhasePill phase={phase} />
+        {links.map((link, index) => (
+          <a key={`${link}-${index}`} href={link} target="_blank" rel="noreferrer" className={cn(linkPill, tap)}>
+            {links.length > 1 ? `Open design ${index + 1} in Figma` : "Open in Figma"}
+            <ExternalLink className="size-3.5" />
+          </a>
+        ))}
+        <button type="button" className={cn(quietBtn, tap)} onClick={copyLink}><Link2 className="size-3.5" />Copy review link</button>
+        {manager && review.lifecycle !== "draft" && review.lifecycle !== "archived" ? (
+          <button type="button" className={cn(quietBtn, tap)} onClick={() => act(setLifecycle(review.id, "archived"))}>Archive</button>
         ) : null}
-        {review.lifecycle === "open" && ownsDesign ? (
-          <p className="mt-4 text-[13px] text-[#717171]">You sent this design. Comment on the feedback instead of reviewing it.</p>
-        ) : null}
-      </section>
+      </div>
 
-      <section className="mt-8">
-        <div className="flex items-end justify-between">
-          <h2 className="text-[18px] font-semibold">Progress</h2>
-          <span className="text-[14px] font-semibold">{percent}%</span>
-        </div>
-        <div className="mt-2"><ProgressBar value={percent} /></div>
-        {assigned.length === 0 ? (
-          <p className="mt-3 text-[14px] text-[#717171]">No reviewers are assigned.</p>
-        ) : (
-          <ul className="mt-4 divide-y divide-[var(--border)]">
-            {assigned.map((assignment) => {
-              const person = users.find((entry) => entry.id === assignment.userId)
-              const count = notes.filter((item) => item.authorId === assignment.userId).length
-              const reviewed = count > 0
-              return (
-                <li key={assignment.userId} className="flex flex-wrap items-center gap-3 py-3">
-                  {person ? <Avatar user={person} size={32} /> : null}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[14px] font-medium">{person?.name ?? "Reviewer"}</p>
-                    <p className="text-[12px] text-[#717171]">{assignment.focus} · {count} item{count === 1 ? "" : "s"}</p>
-                  </div>
-                  <span className={cn("chip", reviewed ? "bg-[#DCF5EA] text-[#008A5B]" : "bg-[#F7F7F7] text-[#717171]")}>
-                    {reviewed ? "Reviewed" : "Pending review"}
-                  </span>
-                  {manager && !reviewed ? (
-                    <button type="button" className={cn("btn btn-sm", tap)} onClick={() => act(remindReviewer(review.id, assignment.userId))}>Remind</button>
-                  ) : null}
-                </li>
-              )
-            })}
+      {links.length === 0 ? <p className="mt-4 text-[14px] text-[#717171]">No Figma link yet.</p> : null}
+      {review.description ? <p className="mt-5 max-w-[68ch] text-[15px] leading-7 text-[#3C3C3C]">{review.description}</p> : null}
+
+      <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="min-w-0">
+          <h2 className="text-[18px] font-semibold">Feedback</h2>
+          <ul className="mt-2">
+            {notes.length === 0 ? <li className="py-8 text-[14px] text-[#717171]">No feedback yet.</li> : null}
+            {notes.map((item) => (
+              <Note
+                key={item.id}
+                item={item}
+                manager={manager}
+                canEdit={review.lifecycle === "open" && item.authorId === user.id && !ownsDesign}
+                canComment={review.lifecycle === "open" && ownsDesign}
+                criteriaName={criteria.find((entry) => entry.id === item.criterionId)?.name ?? "Criterion"}
+                author={users.find((person) => person.id === item.authorId)?.name ?? "Someone"}
+                criteria={criteria
+                  .filter((entry) => entry.active || entry.id === item.criterionId)
+                  .sort((a, b) => a.order - b.order)
+                  .map((entry) => ({ id: entry.id, name: entry.name }))}
+              />
+            ))}
           </ul>
-        )}
-      </section>
+          {review.lifecycle === "open" && !ownsDesign ? (
+            <PointForm reviewId={review.id} criteria={activeCriteria.map((item) => ({ id: item.id, name: item.name }))} />
+          ) : null}
+          {review.lifecycle === "open" && ownsDesign ? (
+            <p className="mt-4 text-[13px] text-[#717171]">You sent this design. Comment on the feedback instead of reviewing it.</p>
+          ) : null}
+        </section>
+
+        <aside className="rounded-3xl bg-[#F6F7F8] p-5 lg:sticky lg:top-6">
+          <div className="flex items-end justify-between gap-3">
+            <h2 className="text-[15px] font-semibold">Progress</h2>
+            <p className="text-[28px] font-semibold leading-none tracking-tight">{percent}%</p>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-white" role="meter" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100} aria-label={`${percent}% complete`}>
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.max(0, Math.min(100, percent))}%`,
+                background: percent >= 100 ? "#1F9D55" : "linear-gradient(90deg, #F6D365, #F5A524)",
+              }}
+            />
+          </div>
+          <p className="mt-2 text-[12px] text-[#717171]">
+            {assigned.length === 0 ? "No reviewers are assigned." : `${reviewedCount} of ${assigned.length} reviewed`}
+          </p>
+          {assigned.length > 0 ? (
+            <ul className="mt-4 space-y-3">
+              {assigned.map((assignment) => {
+                const person = users.find((entry) => entry.id === assignment.userId)
+                const count = notes.filter((item) => item.authorId === assignment.userId).length
+                const reviewed = count > 0
+                return (
+                  <li key={assignment.userId} className="flex items-center gap-3">
+                    {person ? <Avatar user={person} size={36} /> : null}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-medium">{person?.name ?? "Reviewer"}</p>
+                      <p className="text-[12px] leading-4 text-[#717171]">{assignment.focus} · {count} item{count === 1 ? "" : "s"}</p>
+                      <p className={cn("text-[12px] leading-4", reviewed ? "text-[#1F9D55]" : "text-[#8A8A8A]")}>{reviewed ? "Reviewed" : "Pending review"}</p>
+                    </div>
+                    {manager && !reviewed ? (
+                      <button type="button" className={cn(quietBtn, "h-8 px-3", tap)} onClick={() => act(remindReviewer(review.id, assignment.userId))}>Remind</button>
+                    ) : null}
+                  </li>
+                )
+              })}
+            </ul>
+          ) : null}
+        </aside>
+      </div>
     </div>
   )
 }
+
+const quietBtn = "inline-flex h-9 items-center gap-1.5 rounded-full border border-[#E6E6E6] bg-white px-3.5 text-[13px] font-medium text-[#222]"
+const solidBtn = "inline-flex h-9 items-center rounded-full bg-[#111] px-4 text-[13px] font-semibold text-white"
+const linkPill = "inline-flex h-7 items-center gap-1 rounded-full border border-[#D5E4FF] bg-[#F3F7FF] px-2.5 text-[12px] font-medium text-[#2F6FED]"
 
 function Note({
   item,
@@ -231,36 +242,7 @@ function Note({
   }
 
   return (
-    <li className="rounded-2xl border border-[#EBEBEB] px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span className="text-[14px] font-medium">{author}</span>
-        {editing ? null : <span className="text-[13px] text-[#717171]">{criteriaName}</span>}
-        {editing ? null : <SeverityPill severity={item.severity} />}
-        <span className="ml-auto flex shrink-0 items-center gap-1">
-          {!editing && manager && item.status !== "draft" ? (
-            <select
-              className="h-8 rounded-lg border border-[#EBEBEB] bg-white pl-2 text-[13px]"
-              aria-label="Feedback status"
-              value={item.status}
-              onChange={(event) => {
-                void setFeedbackStatus(item.id, event.target.value as Exclude<FeedbackStatus, "draft">).then((result) => {
-                  if (!result.ok) toast.error(result.message)
-                })
-              }}
-            >
-              {STATUSES.map((status) => (
-                <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>
-              ))}
-            </select>
-          ) : null}
-          {!editing && !manager ? <span className="text-[12px] capitalize text-[#717171]">{item.status}</span> : null}
-          {canEdit && !editing ? (
-            <button type="button" className={cn("grid size-8 place-items-center rounded-full text-[#222] hover:bg-[#F7F7F7]", tap)} aria-label="Edit feedback" onClick={startEdit}>
-              <Pencil className="size-4" />
-            </button>
-          ) : null}
-        </span>
-      </div>
+    <li className="border-b border-[#EFEFEF] py-6">
       {editing ? (
         <div>
           <p className="field-label mt-0">Criterion</p>
@@ -286,20 +268,52 @@ function Note({
           <label className="field-label">Figma comment link (optional)</label>
           <input className="field" value={figmaLink} onChange={(event) => setFigmaLink(event.target.value)} placeholder="https://" />
           <div className="mt-4 flex justify-end gap-2">
-            <button type="button" className={cn("btn", tap)} onClick={() => setEditing(false)}>Cancel</button>
-            <button type="button" className={cn("btn btn-primary", tap)} onClick={() => void save()}>Save</button>
+            <button type="button" className={cn(quietBtn, tap)} onClick={() => setEditing(false)}>Cancel</button>
+            <button type="button" className={cn(solidBtn, tap)} onClick={() => void save()}>Save</button>
           </div>
         </div>
       ) : (
         <>
-          <p className="mt-2 text-[14px] leading-5">{item.observation}</p>
-          {item.recommendation ? <p className="mt-1 text-[13px] leading-5 text-[#717171]">{item.recommendation}</p> : null}
-          {item.figmaLink ? (
-            <a href={item.figmaLink} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-medium underline">Figma comment</a>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[18px] font-semibold leading-6">{item.observation}</p>
+              <p className="mt-1 text-[13px] text-[#717171]">{author} · {criteriaName}</p>
+            </div>
+            <span className="flex shrink-0 items-center gap-1">
+          {!editing && manager && item.status !== "draft" ? (
+            <select
+              className="h-8 rounded-full border border-[#E6E6E6] bg-white pl-3 text-[13px]"
+              aria-label="Feedback status"
+              value={item.status}
+              onChange={(event) => {
+                void setFeedbackStatus(item.id, event.target.value as Exclude<FeedbackStatus, "draft">).then((result) => {
+                  if (!result.ok) toast.error(result.message)
+                })
+              }}
+            >
+              {STATUSES.map((status) => (
+                <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>
+              ))}
+            </select>
           ) : null}
+          {!editing && !manager ? <span className="text-[12px] capitalize text-[#717171]">{item.status}</span> : null}
+          {canEdit && !editing ? (
+            <button type="button" className={cn("grid size-8 place-items-center rounded-full text-[#222] hover:bg-[#F7F7F7]", tap)} aria-label="Edit feedback" onClick={startEdit}>
+              <Pencil className="size-4" />
+            </button>
+          ) : null}
+            </span>
+          </div>
+          {item.recommendation ? <p className="mt-3 max-w-[68ch] text-[14px] leading-6 text-[#3C3C3C]">{item.recommendation}</p> : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <SeverityPill severity={item.severity} />
+            {item.figmaLink ? (
+              <a href={item.figmaLink} target="_blank" rel="noreferrer" className={cn(linkPill, tap)}>Figma comment</a>
+            ) : null}
+          </div>
+          <OwnerComment item={item} canComment={canComment} />
         </>
       )}
-      {editing ? null : <OwnerComment item={item} canComment={canComment} />}
     </li>
   )
 }
@@ -321,7 +335,7 @@ function OwnerComment({ item, canComment }: { item: Feedback; canComment: boolea
   if (!item.ownerResponse && !canComment) return null
 
   return (
-    <div className="mt-3 border-t border-[#EBEBEB] pt-3">
+    <div className="mt-4 rounded-2xl bg-[#F6F7F8] px-4 py-3">
       {item.ownerResponse && !open ? (
         <p className="text-[14px] leading-5"><span className="font-medium">Comment. </span>{item.ownerResponse}</p>
       ) : null}
@@ -386,12 +400,12 @@ function PointForm({ reviewId, criteria }: { reviewId: string; criteria: { id: s
 
   if (!open) {
     return (
-      <button type="button" className={cn("btn mt-4", tap)} onClick={() => setOpen(true)}>Add feedback</button>
+      <button type="button" className={cn(solidBtn, "mt-2", tap)} onClick={() => setOpen(true)}>Add feedback</button>
     )
   }
 
   return (
-    <div className="mt-4 rounded-[14px] border border-[var(--border)] p-4">
+    <div className="mt-2 rounded-3xl bg-[#F6F7F8] p-5">
       <p className="text-[13px] font-semibold">Which criterion is this about?</p>
       {criteria.length === 0 ? <p className="mt-2 text-[13px] text-[#717171]">No active criteria yet. Add them in Settings.</p> : null}
       <div className="mt-2 flex flex-wrap gap-2">
