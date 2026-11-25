@@ -94,7 +94,7 @@ export function CalendarBoard() {
   const label = view === "month" ? formatMonth(focus) : view === "day" ? formatLongDate(focus) : formatWeekTitle(weekStart, addDays(weekStart, 6))
 
   return (
-    <div className={pageWrap("max-w-[1280px]")}>
+    <div className={pageWrap()}>
       <PageHeader
         eyebrow="Calendar"
         title={label}
