@@ -1,62 +1,57 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
 import { toast } from "sonner"
-import { AvatarStack, EmptyState, PageHeader, PhasePill, pageWrap } from "@/components/common"
+import { EmptyState, PageHeader, pageWrap } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
-import { canSeeReview, isManager, phaseOf } from "@/lib/domain"
-import {
-  addDays,
-  formatDay,
-  formatMonth,
-  formatWeekday,
-  monthWeeks,
-  startOfWeek,
-  todayISO,
-  toISODate,
-  windowLabel,
-} from "@/lib/format"
-import { PHASE_META, PHASE_ORDER, tap } from "@/lib/presentation"
 import { SendDesignLink } from "@/components/reviews/create-review"
+import { canSeeReview, isManager, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
+import { addDays, formatDay, formatMonth, startOfWeek, todayISO, toISODate } from "@/lib/format"
+import { tap } from "@/lib/presentation"
 import { rescheduleReview, useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
-import type { Review } from "@/lib/types"
+import type { Feedback, Review } from "@/lib/types"
 
-type View = "month" | "week" | "day"
+type View = "week" | "month" | "day"
+
+const STATUS_META: Record<ReviewListStatus, { label: string; chip: string; dot: string }> = {
+  pending: { label: "Pending review", chip: "bg-[#E8F1FB] text-[#1F4E8C] border-[#D3E4F8]", dot: "bg-[#2B7FFF]" },
+  in_progress: { label: "In progress", chip: "bg-[#FFF1D6] text-[#8A5A00] border-[#F3E0B5]", dot: "bg-[#E08A00]" },
+  completed: { label: "Completed", chip: "bg-[#DCF5EA] text-[#046B48] border-[#C6EBD9]", dot: "bg-[#008A5B]" },
+}
+
+const HOUR_START = 8
+const HOUR_END = 19
+const HOUR_HEIGHT = 64
+const HOURS = Array.from({ length: HOUR_END - HOUR_START }, (_, index) => HOUR_START + index)
 
 export function CalendarBoard() {
-  const { user, users, reviews } = useWorkspace()
-  const router = useRouter()
+  const { user, users, reviews, feedback, workspace } = useWorkspace()
   const [cursor, setCursor] = useState<Date | null>(null)
   useEffect(() => {
     setCursor((current) => current ?? new Date())
   }, [])
-  const [view, setView] = useState<View>("month")
+  const [view, setView] = useState<View>("week")
   const [project, setProject] = useState("all")
-  const [owner, setOwner] = useState("all")
-  const [reviewer, setReviewer] = useState("all")
-  const [status, setStatus] = useState("all")
+  const [status, setStatus] = useState<ReviewListStatus | "all">("all")
   const [dragging, setDragging] = useState<string | null>(null)
   const [dropDate, setDropDate] = useState<string | null>(null)
 
   const people = useMemo(() => new Map(users.map((person) => [person.id, person])), [users])
-  if (!user || !cursor) return null
+  if (!user || !cursor || !workspace) return null
   const focus = cursor
   const today = todayISO()
+  const projects = [...workspace.projects].sort((a, b) => a.localeCompare(b))
 
   const visible = reviews.filter((review) => {
     if (!canSeeReview(user, review)) return false
-    const phase = phaseOf(review)
+    if (review.lifecycle === "draft" || review.lifecycle === "archived") return false
     if (project !== "all" && review.project !== project) return false
-    if (owner !== "all" && review.ownerId !== owner) return false
-    if (reviewer !== "all" && !review.reviewers.some((item) => item.userId === reviewer)) return false
-    if (status !== "all" && phase !== status) return false
+    if (status !== "all" && reviewListStatus(review.id, feedback) !== status) return false
     return true
   })
-  const projects = [...new Set(reviews.map((review) => review.project))].sort()
 
   function shift(direction: number) {
     const next = new Date(focus)
@@ -74,7 +69,11 @@ export function CalendarBoard() {
       return
     }
     const review = reviews.find((item) => item.id === id)
-    if (!review || !isManager(user, review)) return
+    if (!review || !isManager(user, review)) {
+      setDragging(null)
+      setDropDate(null)
+      return
+    }
     const result = await rescheduleReview(id, date)
     if (!result.ok && result.message) toast.error(result.message)
     else if (result.ok && review.deadline !== date) toast.success(`${review.title} is now due ${formatDay(date)}.`)
@@ -82,19 +81,15 @@ export function CalendarBoard() {
     setDropDate(null)
   }
 
-  const label =
-    view === "month"
-      ? formatMonth(cursor)
-      : view === "week"
-        ? `${formatWeekday(startOfWeek(cursor))} – ${formatWeekday(addDays(startOfWeek(cursor), 6))}`
-        : formatWeekday(cursor)
+  const weekStart = startOfWeek(focus)
+  const label = view === "month" ? formatMonth(focus) : view === "day" ? formatWeekTitle(focus, focus) : formatWeekTitle(weekStart, addDays(weekStart, 6))
 
   return (
     <div className={pageWrap("max-w-[1280px]")}>
       <PageHeader
         eyebrow="Calendar"
         title={label}
-        description="Reviews sit on the day they are due. Drag a review to move that deadline, or click a day to send a new one."
+        description="The week shows each review on the day it is due. Drag a review to another day to move that deadline."
         action={
           <SendDesignLink className={cn(buttonVariants({ size: "lg" }))}>
             <Plus />
@@ -105,7 +100,7 @@ export function CalendarBoard() {
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-xl bg-[#F7F7F7] p-1">
-          {(["month", "week", "day"] as View[]).map((item) => (
+          {(["week", "month", "day"] as View[]).map((item) => (
             <button
               key={item}
               type="button"
@@ -126,89 +121,49 @@ export function CalendarBoard() {
           <ChevronRight />
         </button>
         <Filter label="Project" value={project} onChange={setProject} options={projects.map((item) => ({ value: item, label: item }))} />
-        <Filter label="Designer" value={owner} onChange={setOwner} options={users.map((item) => ({ value: item.id, label: item.name }))} />
-        <Filter label="Reviewer" value={reviewer} onChange={setReviewer} options={users.map((item) => ({ value: item.id, label: item.name }))} />
-        <Filter label="Status" value={status} onChange={setStatus} options={PHASE_ORDER.map((item) => ({ value: item, label: PHASE_META[item].label }))} />
+        <Filter
+          label="Status"
+          value={status}
+          onChange={(value) => setStatus(value as ReviewListStatus | "all")}
+          options={(Object.keys(STATUS_META) as ReviewListStatus[]).map((item) => ({ value: item, label: STATUS_META[item].label }))}
+        />
       </div>
 
-      <div className="mt-4 hidden flex-wrap gap-3 md:flex">
-        {PHASE_ORDER.map((phase) => (
-          <span key={phase} className="inline-flex items-center gap-1.5 text-[12px] text-[#717171]">
-            <span className={cn("size-2 rounded-full", PHASE_META[phase].dot)} />
-            {PHASE_META[phase].label}
+      <div className="mt-4 flex flex-wrap gap-3">
+        {(Object.keys(STATUS_META) as ReviewListStatus[]).map((item) => (
+          <span key={item} className="inline-flex items-center gap-1.5 text-[12px] text-[#717171]">
+            <span className={cn("size-2 rounded-full", STATUS_META[item].dot)} />
+            {STATUS_META[item].label}
           </span>
         ))}
       </div>
 
-      <div className="mt-5 md:hidden">
-        <Agenda
-          reviews={visible.filter((review) => review.deadline >= rangeStart(cursor, view) && review.deadline <= rangeEnd(cursor, view))}
-          people={people}
-          empty="Nothing is due in this range."
-        />
-      </div>
-
-      <div className="mt-5 hidden md:block">
+      <div className="mt-5">
         {view === "month" ? (
-          <MonthGrid
-            cursor={cursor}
+          <MonthGrid cursor={focus} reviews={visible} feedback={feedback} dragging={dragging} dropDate={dropDate} today={today} onDragStart={setDragging} onDragEnd={() => { setDragging(null); setDropDate(null) }} onHover={setDropDate} onDrop={move} />
+        ) : (
+          <WeekGrid
+            days={view === "day" ? [focus] : Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))}
             reviews={visible}
+            feedback={feedback}
+            people={people}
             dragging={dragging}
             dropDate={dropDate}
-            onDragStart={setDragging}
-            onDragEnd={() => { setDragging(null); setDropDate(null) }}
-            onHover={setDropDate}
-            onDrop={move}
             today={today}
-          />
-        ) : null}
-        {view === "week" ? (
-          <ColumnGrid
-            days={Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(cursor), index))}
-            reviews={visible}
-            today={today}
-            dragging={dragging}
-            dropDate={dropDate}
             onDragStart={setDragging}
             onDragEnd={() => { setDragging(null); setDropDate(null) }}
             onHover={setDropDate}
             onDrop={move}
           />
-        ) : null}
-        {view === "day" ? (
-          <div className="rounded-2xl border border-[#EBEBEB] p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-medium">{formatWeekday(cursor)}</h2>
-              {toISODate(cursor) >= today ? (
-                <button type="button" className={cn("text-[13px] font-medium", tap)} onClick={() => router.push(`/reviews/new?new=${globalThis.crypto.randomUUID()}`)}>
-                  Send a review
-                </button>
-              ) : (
-                <span className="text-[13px] text-[#717171]">Past days stay open for the reviews already due.</span>
-              )}
-            </div>
-            <Agenda
-              reviews={visible.filter((review) => review.deadline === toISODate(cursor))}
-              people={people}
-              empty="Nothing is due on this day."
-            />
+        )}
+        {visible.length === 0 ? (
+          <div className="mt-4">
+            <EmptyState title="Nothing due in this view" body={project !== "all" || status !== "all" ? "No sent reviews match these filters." : "Send a design and it will sit on the day it is due."} />
           </div>
         ) : null}
       </div>
     </div>
   )
-}
-
-function rangeStart(cursor: Date, view: View) {
-  if (view === "month") return toISODate(new Date(cursor.getFullYear(), cursor.getMonth(), 1))
-  if (view === "week") return toISODate(startOfWeek(cursor))
-  return toISODate(cursor)
-}
-
-function rangeEnd(cursor: Date, view: View) {
-  if (view === "month") return toISODate(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0))
-  if (view === "week") return toISODate(addDays(startOfWeek(cursor), 6))
-  return toISODate(cursor)
 }
 
 function Filter({
@@ -223,9 +178,9 @@ function Filter({
   options: { value: string; label: string }[]
 }) {
   return (
-    <label className="inline-flex items-center gap-2 rounded-xl border border-[#EBEBEB] bg-white px-3 text-[13px]">
+    <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#EBEBEB] bg-white px-3 text-[13px]">
       <span className="text-[#717171]">{label}</span>
-      <select className="h-10 bg-transparent pr-1 outline-none" value={value} onChange={(event) => onChange(event.target.value)} aria-label={label}>
+      <select className="bg-transparent pr-1 outline-none" value={value} onChange={(event) => onChange(event.target.value)} aria-label={label}>
         <option value="all">All</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>
@@ -235,270 +190,282 @@ function Filter({
   )
 }
 
-function Agenda({
+function WeekGrid({
+  days,
   reviews,
+  feedback,
   people,
-  empty,
+  dragging,
+  dropDate,
+  today,
+  onDragStart,
+  onDragEnd,
+  onHover,
+  onDrop,
 }: {
+  days: Date[]
   reviews: Review[]
-  people: Map<string, { id: string; name: string }>
-  empty: string
+  feedback: Feedback[]
+  people: Map<string, { name: string }>
+  dragging: string | null
+  dropDate: string | null
+  today: string
+  onDragStart: (id: string) => void
+  onDragEnd: () => void
+  onHover: (date: string) => void
+  onDrop: (id: string, date: string) => void
 }) {
-  if (reviews.length === 0) return <EmptyState title="Nothing scheduled" body={empty} />
+  const dragged = useRef(false)
+  const columns = days.length
   return (
-    <ul className="space-y-3">
-      {reviews
-        .slice()
-        .sort((a, b) => a.deadline.localeCompare(b.deadline))
-        .map((review) => {
-          const owner = people.get(review.ownerId)
-          const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
-          return (
-            <li key={review.id}>
-              <Link href={`/reviews/${review.id}`} className="block rounded-2xl border border-[#EBEBEB] px-4 py-4 hover:bg-[#F7F7F7]">
-                <span className="flex items-start justify-between gap-3">
-                  <span className="font-medium">{review.title}</span>
-                  <PhasePill phase={phaseOf(review)} />
-                </span>
-                <span className="mt-1 block text-[13px] text-[#717171]">
-                  {review.project} · {windowLabel(review.startDate, review.deadline, review.startTime, review.endTime)}
-                </span>
-                <span className="mt-3 flex items-center justify-between">
-                  <span className="text-[13px] text-[#717171]">{owner?.name} · {review.reviewers.length} reviewers</span>
-                  <AvatarStack users={reviewers} />
-                </span>
-              </Link>
-            </li>
-          )
-        })}
-    </ul>
+    <div className="overflow-x-auto rounded-2xl border border-[#E5E5E5] bg-white">
+      <div className={cn("min-w-[760px]", columns === 1 && "min-w-0")}>
+        <div className="grid border-b border-[#E5E5E5]" style={{ gridTemplateColumns: `72px repeat(${columns}, minmax(0, 1fr))` }}>
+          <div className="border-r border-[#E5E5E5]" />
+          {days.map((day) => {
+            const iso = toISODate(day)
+            return (
+              <div key={iso} className="border-l border-[#E5E5E5] px-2 py-3 text-center first:border-l-0">
+                <div className="text-[12px] font-medium text-[#717171]">{day.toLocaleDateString("en-GB", { weekday: "short" })}</div>
+                {iso >= today ? (
+                  <SendDesignLink className={cn("mx-auto mt-1 grid size-8 place-items-center rounded-full text-[14px] font-semibold", iso === today ? "bg-[#FF385C] text-white" : "text-[#222] hover:bg-[#F7F7F7]")}>
+                    {day.getDate()}
+                  </SendDesignLink>
+                ) : (
+                  <span className="mx-auto mt-1 grid size-8 place-items-center rounded-full text-[14px] font-semibold text-[#222]">{day.getDate()}</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <div className="relative">
+          <div className="grid" style={{ gridTemplateColumns: `72px repeat(${columns}, minmax(0, 1fr))` }}>
+            {HOURS.map((hour) => (
+              <div key={hour} className="contents">
+                <div className="relative h-16 border-r border-b border-[#E5E5E5] pr-2 text-right">
+                  <span className="absolute top-1 right-2 text-[11px] leading-none text-[#717171]">{hourLabel(hour)}</span>
+                </div>
+                {days.map((day) => {
+                  const iso = toISODate(day)
+                  return (
+                    <div
+                      key={`${iso}-${hour}`}
+                      onDragOver={(event) => {
+                        if (!dragging) return
+                        event.preventDefault()
+                        onHover(iso)
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault()
+                        const id = event.dataTransfer.getData("text/plain")
+                        if (id) onDrop(id, iso)
+                      }}
+                      className={cn("h-16 border-b border-l border-[#E5E5E5]", dropDate === iso && dragging && "bg-[#F7F7F7]")}
+                    />
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+          <div className="pointer-events-none absolute inset-0 grid" style={{ gridTemplateColumns: `72px repeat(${columns}, minmax(0, 1fr))` }}>
+            <div />
+            {days.map((day) => {
+              const iso = toISODate(day)
+              const items = layoutDay(reviews.filter((review) => review.deadline === iso))
+              return (
+                <div key={iso} className="relative">
+                  {items.map((item) => {
+                    const state = reviewListStatus(item.review.id, feedback)
+                    const owner = people.get(item.review.ownerId)
+                    return (
+                      <Link
+                        key={item.review.id}
+                        href={`/reviews/${item.review.id}`}
+                        draggable
+                        onDragStart={(drag) => {
+                          dragged.current = true
+                          drag.dataTransfer.setData("text/plain", item.review.id)
+                          drag.dataTransfer.effectAllowed = "move"
+                          onDragStart(item.review.id)
+                        }}
+                        onDragEnd={onDragEnd}
+                        onClick={(click) => {
+                          if (!dragged.current) return
+                          click.preventDefault()
+                          dragged.current = false
+                        }}
+                        style={{
+                          top: item.top,
+                          height: item.height,
+                          left: `calc(${item.column * (100 / item.columns)}% + 4px)`,
+                          width: `calc(${100 / item.columns}% - 8px)`,
+                        }}
+                        className={cn(
+                          "pointer-events-auto absolute overflow-hidden rounded-lg border px-2 py-1 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
+                          STATUS_META[state].chip,
+                          dragging === item.review.id && "opacity-60",
+                        )}
+                      >
+                        <span className="block truncate text-[12px] font-semibold">{item.review.title}</span>
+                        <span className="block truncate text-[11px] font-normal opacity-80">{item.review.project}{owner ? ` · ${owner.name}` : ""}</span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
 function MonthGrid({
   cursor,
   reviews,
+  feedback,
   dragging,
   dropDate,
+  today,
   onDragStart,
   onDragEnd,
   onHover,
   onDrop,
-  today,
 }: {
   cursor: Date
   reviews: Review[]
+  feedback: Feedback[]
   dragging: string | null
   dropDate: string | null
+  today: string
   onDragStart: (id: string) => void
   onDragEnd: () => void
   onHover: (date: string) => void
   onDrop: (id: string, date: string) => void
-  today: string
 }) {
-  const weeks = monthWeeks(cursor)
   const dragged = useRef(false)
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
+  const gridStart = startOfWeek(first)
+  const days = Array.from({ length: 42 }, (_, index) => addDays(gridStart, index))
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#EBEBEB]">
-      <div className="grid grid-cols-7 border-b border-[#EBEBEB] bg-white">
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-          <div key={day} className="px-3 py-2 text-[12px] font-medium text-[#717171]">{day}</div>
-        ))}
+    <div className="overflow-x-auto rounded-2xl border border-[#E5E5E5] bg-white">
+      <div className="min-w-[720px]">
+        <div className="grid grid-cols-7 border-b border-[#E5E5E5]">
+          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+            <div key={day} className="border-r border-[#E5E5E5] px-2 py-2 text-[12px] font-medium text-[#717171] last:border-r-0">{day}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {days.map((day) => {
+            const iso = toISODate(day)
+            const outside = day.getMonth() !== cursor.getMonth()
+            const items = reviews.filter((review) => review.deadline === iso)
+            return (
+              <div
+                key={iso}
+                onDragOver={(event) => {
+                  if (!dragging) return
+                  event.preventDefault()
+                  onHover(iso)
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  const id = event.dataTransfer.getData("text/plain")
+                  if (id) onDrop(id, iso)
+                }}
+                className={cn("min-h-[124px] border-r border-b border-[#E5E5E5] p-1.5 last:border-r-0", dropDate === iso && dragging && "bg-[#F7F7F7]")}
+              >
+                {iso >= today ? (
+                  <SendDesignLink className={cn("mb-1 inline-flex size-7 items-center justify-center rounded-full text-[13px]", iso === today ? "bg-[#FF385C] font-medium text-white" : outside ? "text-[#B0B0B0] hover:bg-[#F7F7F7]" : "text-[#222] hover:bg-[#F7F7F7]")}>
+                    {day.getDate()}
+                  </SendDesignLink>
+                ) : (
+                  <span className={cn("mb-1 inline-flex size-7 items-center justify-center rounded-full text-[13px]", outside ? "text-[#B0B0B0]" : "text-[#222]")}>{day.getDate()}</span>
+                )}
+                <div className="space-y-1">
+                  {items.map((review) => {
+                    const state = reviewListStatus(review.id, feedback)
+                    return (
+                      <Link
+                        key={review.id}
+                        href={`/reviews/${review.id}`}
+                        draggable
+                        onDragStart={(drag) => {
+                          dragged.current = true
+                          drag.dataTransfer.setData("text/plain", review.id)
+                          drag.dataTransfer.effectAllowed = "move"
+                          onDragStart(review.id)
+                        }}
+                        onDragEnd={onDragEnd}
+                        onClick={(click) => {
+                          if (!dragged.current) return
+                          click.preventDefault()
+                          dragged.current = false
+                        }}
+                        className={cn("block truncate rounded-md border px-1.5 py-1 text-[11px] font-medium", STATUS_META[state].chip)}
+                      >
+                        {review.title}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
-      {weeks.map((week) => {
-        const start = toISODate(week[0])
-        const end = toISODate(week[6])
-        const events = placeEvents(reviews.filter((review) => review.deadline >= start && review.deadline <= end), week)
-        const lanes = Math.max(1, ...events.map((event) => event.lane + 1), 1)
-        return (
-          <div key={start} className="relative border-t border-[#EBEBEB]" style={{ minHeight: 52 + lanes * 28 }}>
-            <div className="grid h-full grid-cols-7">
-              {week.map((day) => {
-                const iso = toISODate(day)
-                const outside = day.getMonth() !== cursor.getMonth()
-                return (
-                  <div
-                    key={iso}
-                    onDragOver={(event) => {
-                      if (!dragging) return
-                      event.preventDefault()
-                      onHover(iso)
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault()
-                      const id = event.dataTransfer.getData("text/plain")
-                      if (id) onDrop(id, iso)
-                    }}
-                    className={cn("border-r border-[#EBEBEB] last:border-r-0", dropDate === iso && dragging && "bg-[#F7F7F7]")}
-                  >
-                    {iso >= today ? (
-                      <SendDesignLink
-                        className={cn(
-                          "m-2 inline-flex size-7 items-center justify-center rounded-full text-[13px]",
-                          iso === today ? "bg-[#FF385C] font-medium text-white" : outside ? "text-[#B0B0B0]" : "text-[#222] hover:bg-[#F7F7F7]",
-                        )}
-                      >
-                        {day.getDate()}
-                      </SendDesignLink>
-                    ) : (
-                      <span
-                        className={cn(
-                          "m-2 inline-flex size-7 items-center justify-center rounded-full text-[13px]",
-                          outside ? "text-[#B0B0B0]" : "text-[#222]",
-                        )}
-                      >
-                        {day.getDate()}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <div className="pointer-events-none absolute inset-x-0 top-10 grid grid-cols-7 gap-y-1">
-              {events.map((event) => (
-                <Link
-                  key={`${event.review.id}-${start}`}
-                  href={`/reviews/${event.review.id}`}
-                  draggable
-                  onDragStart={(drag) => {
-                    dragged.current = true
-                    drag.dataTransfer.setData("text/plain", event.review.id)
-                    drag.dataTransfer.effectAllowed = "move"
-                    onDragStart(event.review.id)
-                  }}
-                  onDragEnd={onDragEnd}
-                  onClick={(click) => {
-                    if (!dragged.current) return
-                    click.preventDefault()
-                    dragged.current = false
-                  }}
-                  style={{ gridColumn: `${event.start + 1} / ${event.end + 2}`, gridRow: event.lane + 1 }}
-                  className={cn(
-                    "pointer-events-auto mx-1 flex h-6 items-center truncate rounded-md px-2 text-left text-[12px] font-medium",
-                    PHASE_META[phaseOf(event.review)].tint,
-                    dragging && "pointer-events-none",
-                  )}
-                >
-                  {event.review.title}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )
-      })}
     </div>
   )
 }
 
-function placeEvents(reviews: Review[], week: Date[]) {
-  const start = toISODate(week[0])
+function layoutDay(reviews: Review[]) {
   const placed = reviews
     .map((review) => {
-      const col = dayIndex(start, review.deadline)
-      if (col < 0 || col > 6) return null
-      return { review, start: col, end: col, lane: 0 }
+      const start = clampMinute(minutesOf(review.startTime))
+      return { review, start, end: start + 60, column: 0, columns: 1 }
     })
-    .filter((event): event is { review: Review; start: number; end: number; lane: number } => event !== null)
-    .sort((a, b) => a.start - b.start)
-  const laneEnds: number[] = []
-  for (const event of placed) {
-    let lane = laneEnds.findIndex((end) => end < event.start)
-    if (lane === -1) {
-      lane = laneEnds.length
-      laneEnds.push(event.end)
+    .sort((a, b) => a.start - b.start || a.review.title.localeCompare(b.review.title))
+  const columnEnds: number[] = []
+  for (const item of placed) {
+    let column = columnEnds.findIndex((end) => end <= item.start)
+    if (column === -1) {
+      column = columnEnds.length
+      columnEnds.push(item.end)
     } else {
-      laneEnds[lane] = event.end
+      columnEnds[column] = item.end
     }
-    event.lane = lane
+    item.column = column
   }
-  return placed
+  const columns = Math.max(1, columnEnds.length)
+  return placed.map((item) => ({
+    ...item,
+    columns,
+    top: ((item.start - HOUR_START * 60) / 60) * HOUR_HEIGHT + 2,
+    height: HOUR_HEIGHT - 6,
+  }))
 }
 
-function dayIndex(start: string, date: string) {
-  const a = start.split("-").map(Number)
-  const b = date.split("-").map(Number)
-  const from = new Date(a[0], a[1] - 1, a[2]).getTime()
-  const to = new Date(b[0], b[1] - 1, b[2]).getTime()
-  return Math.round((to - from) / 86_400_000)
+function minutesOf(time: string) {
+  const match = /^(\d{1,2}):(\d{2})/.exec(time.trim())
+  if (!match) return 9 * 60
+  return Number(match[1]) * 60 + Number(match[2])
 }
 
-function ColumnGrid({
-  days,
-  reviews,
-  dragging,
-  dropDate,
-  onDragStart,
-  onDragEnd,
-  onHover,
-  onDrop,
-  today,
-}: {
-  days: Date[]
-  reviews: Review[]
-  dragging: string | null
-  dropDate: string | null
-  onDragStart: (id: string) => void
-  onDragEnd: () => void
-  onHover: (date: string) => void
-  onDrop: (id: string, date: string) => void
-  today: string
-}) {
-  const dragged = useRef(false)
-  return (
-    <div className="grid grid-cols-7 gap-2">
-      {days.map((day) => {
-        const iso = toISODate(day)
-        const items = reviews.filter((review) => review.deadline === iso)
-        return (
-          <div
-            key={iso}
-            onDragOver={(event) => {
-              if (!dragging) return
-              event.preventDefault()
-              onHover(iso)
-            }}
-            onDrop={(event) => {
-              event.preventDefault()
-              const id = event.dataTransfer.getData("text/plain")
-              if (id) onDrop(id, iso)
-            }}
-            className={cn("min-h-[420px] rounded-2xl border border-[#EBEBEB] p-2", dropDate === iso && dragging && "bg-[#F7F7F7]")}
-          >
-            {iso >= today ? (
-              <SendDesignLink className={cn("mb-2 inline-flex rounded-full px-2 py-1 text-[12px] font-medium", iso === today ? "bg-[#FF385C] text-white" : "text-[#717171] hover:bg-[#F7F7F7]")}>
-                {formatWeekday(day)}
-              </SendDesignLink>
-            ) : (
-              <span className="mb-2 inline-flex rounded-full px-2 py-1 text-[12px] font-medium text-[#717171]">{formatWeekday(day)}</span>
-            )}
-            <div className="space-y-2">
-              {items.map((review) => (
-                <Link
-                  key={review.id}
-                  href={`/reviews/${review.id}`}
-                  draggable
-                  onDragStart={(drag) => {
-                    dragged.current = true
-                    drag.dataTransfer.setData("text/plain", review.id)
-                    drag.dataTransfer.effectAllowed = "move"
-                    onDragStart(review.id)
-                  }}
-                  onDragEnd={onDragEnd}
-                  onClick={(click) => {
-                    if (!dragged.current) return
-                    click.preventDefault()
-                    dragged.current = false
-                  }}
-                  className={cn("block rounded-xl px-2 py-2 text-[12px] leading-4 font-medium", PHASE_META[phaseOf(review)].tint, dragging && "pointer-events-none")}
-                >
-                  {review.title}
-                  <span className="mt-1 block font-normal opacity-80">{review.project}</span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
+function clampMinute(minute: number) {
+  const earliest = HOUR_START * 60
+  const latest = (HOUR_END - 1) * 60
+  return Math.min(Math.max(minute, earliest), latest)
+}
+
+function hourLabel(hour: number) {
+  const suffix = hour >= 12 ? "PM" : "AM"
+  const value = hour % 12 === 0 ? 12 : hour % 12
+  return `${value} ${suffix}`
+}
+
+function formatWeekTitle(start: Date, end: Date) {
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()
+  if (sameMonth) return `${start.getDate()}–${end.getDate()} ${formatMonth(end)}`
+  return `${start.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`
 }
