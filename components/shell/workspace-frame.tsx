@@ -70,7 +70,7 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
           </aside>
         </div>
       ) : null}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--background)] shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--background)] shadow-[0_1px_16px_rgba(0,0,0,0.04)]">
         <header className="flex h-14 items-center justify-between border-b border-[var(--border)] px-4 md:hidden">
           <button type="button" className={tap} aria-label="Open menu" onClick={() => setOpen(true)}>
             <Menu className="size-5" />
