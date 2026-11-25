@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { X } from "lucide-react"
+import { Plus, X } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar } from "@/components/common"
 import { DEFAULT_REMINDER_MINUTES, REMINDER_OPTIONS } from "@/lib/constants"
@@ -39,7 +39,7 @@ function SendForm() {
   const { user, users, reviews, workspace } = useWorkspace()
   const [title, setTitle] = useState("")
   const [project, setProject] = useState("")
-  const [figma, setFigma] = useState("")
+  const [figmaLinks, setFigmaLinks] = useState<string[]>([""])
   const [note, setNote] = useState("")
   const [reviewerIds, setReviewerIds] = useState<string[] | null>(null)
   const [query, setQuery] = useState("")
@@ -73,17 +73,22 @@ function SendForm() {
     setQuery("")
   }
 
+  function updateLink(index: number, value: string) {
+    setFigmaLinks((current) => current.map((item, itemIndex) => (itemIndex === index ? value : item)))
+  }
+
   async function submit() {
     const startDate = todayISO()
+    const links = figmaLinks.map((item) => item.trim()).filter(Boolean)
     const draft: ReviewDraft = {
       title,
       project,
       feature: "",
       description: note,
       ownerId: user!.id,
-      figmaUrl: figma,
+      figmaUrl: links[0] ?? "",
       designVersion: "",
-      referenceUrls: [],
+      referenceUrls: links.slice(1),
       startDate,
       deadline: startDate,
       startTime: "",
@@ -102,7 +107,7 @@ function SendForm() {
     toast.success(result.message)
     setTitle("")
     setProject("")
-    setFigma("")
+    setFigmaLinks([""])
     setNote("")
     setQuery("")
     setReviewerIds(null)
@@ -131,8 +136,37 @@ function SendForm() {
         ) : null}
         <label className="field-label">Review title</label>
         <input className="field" name="ux-review-title" autoComplete="off" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Access management flow" />
-        <label className="field-label">Figma link</label>
-        <input className="field" name="ux-review-figma" autoComplete="off" value={figma} onChange={(event) => setFigma(event.target.value)} placeholder="https://figma.com/design/…" />
+        <div className="mt-3.5 flex items-center justify-between gap-3">
+          <label className="text-[13px] font-semibold">Figma links</label>
+          <button
+            type="button"
+            className={cn("inline-flex items-center gap-1 text-[13px] font-medium", tap)}
+            onClick={() => setFigmaLinks((current) => [...current, ""])}
+          >
+            <Plus className="size-3.5" />
+            Add link
+          </button>
+        </div>
+        <div className="mt-1 space-y-2">
+          {figmaLinks.map((link, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <input
+                className="field mt-0 min-w-0 flex-1"
+                name={`ux-review-figma-${index}`}
+                autoComplete="off"
+                value={link}
+                onChange={(event) => updateLink(index, event.target.value)}
+                placeholder="https://figma.com/design/…"
+                aria-label={`Figma link ${index + 1}`}
+              />
+              {figmaLinks.length > 1 ? (
+                <button type="button" className={cn("grid size-9 shrink-0 place-items-center rounded-full text-[#717171] hover:bg-[#F7F7F7]", tap)} aria-label={`Remove Figma link ${index + 1}`} onClick={() => setFigmaLinks((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                  <X className="size-4" />
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
         <label className="field-label">Remind reviewers</label>
         <select className="field" value={reminder} onChange={(event) => setReminder(Number(event.target.value))}>
           {REMINDER_OPTIONS.map((item) => (

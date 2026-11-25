@@ -26,6 +26,7 @@ const STATUSES: Exclude<FeedbackStatus, "draft">[] = ["open", "acknowledged", "r
 export function ReviewWorkspace({ id }: { id: string }) {
   const router = useRouter()
   const { user, users, reviews, criteria, feedback } = useWorkspace()
+  const [linkIndex, setLinkIndex] = useState(0)
   const review = reviews.find((item) => item.id === id)
   if (!user || !review) {
     return (
@@ -41,7 +42,9 @@ export function ReviewWorkspace({ id }: { id: string }) {
   const notes = visibleFeedback(review, user, feedback).filter((item) => item.status !== "draft")
   const activeCriteria = criteria.filter((item) => item.active).sort((a, b) => a.order - b.order)
   const percent = completionOf(review)
-  const embed = review.figmaUrl ? `https://www.figma.com/embed?embed_host=ux-review&url=${encodeURIComponent(review.figmaUrl)}` : ""
+  const links = [review.figmaUrl, ...review.referenceUrls].filter(Boolean)
+  const activeLink = links[Math.min(linkIndex, Math.max(links.length - 1, 0))] ?? ""
+  const embed = activeLink ? `https://www.figma.com/embed?embed_host=ux-review&url=${encodeURIComponent(activeLink)}` : ""
 
   async function act(result: Promise<{ ok: boolean; message?: string }>) {
     const settled = await result
@@ -91,14 +94,28 @@ export function ReviewWorkspace({ id }: { id: string }) {
       </div>
 
       <section className="mt-6 overflow-hidden rounded-[16px] border border-[var(--border)]">
+        {links.length > 1 ? (
+          <div className="flex gap-2 overflow-x-auto border-b border-[var(--border)] px-3 py-2">
+            {links.map((link, index) => (
+              <button
+                key={`${link}-${index}`}
+                type="button"
+                className={cn("h-8 shrink-0 rounded-full px-3 text-[13px] font-medium", tap, index === Math.min(linkIndex, links.length - 1) ? "bg-[#222] text-white" : "bg-[#F7F7F7] text-[#222]")}
+                onClick={() => setLinkIndex(index)}
+              >
+                Design {index + 1}
+              </button>
+            ))}
+          </div>
+        ) : null}
         {embed ? (
           <iframe title="Figma design" src={embed} className="h-[420px] w-full bg-[#F7F7F7]" />
         ) : (
           <div className="grid h-[180px] place-items-center text-[14px] text-[#717171]">No Figma link yet.</div>
         )}
-        {review.figmaUrl ? (
+        {activeLink ? (
           <div className="flex justify-end border-t border-[var(--border)] px-4 py-2">
-            <a href={review.figmaUrl} target="_blank" rel="noreferrer" className={cn("inline-flex items-center gap-1 text-[13px] font-semibold", tap)}>
+            <a href={activeLink} target="_blank" rel="noreferrer" className={cn("inline-flex items-center gap-1 text-[13px] font-semibold", tap)}>
               Open in Figma <ExternalLink className="size-3.5" />
             </a>
           </div>
@@ -230,18 +247,35 @@ function Note({
   }
 
   return (
-    <li className="rounded-[14px] border border-[var(--border)] p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-semibold">{author}</span>
-          {editing ? null : <span className="chip">{criteriaName}</span>}
-          {editing ? null : <SeverityPill severity={item.severity} />}
-        </div>
-        {canEdit && !editing ? (
-          <button type="button" className={cn("grid size-8 shrink-0 place-items-center rounded-full text-[#222] hover:bg-[#F7F7F7]", tap)} aria-label="Edit feedback" onClick={startEdit}>
-            <Pencil className="size-4" />
-          </button>
-        ) : null}
+    <li className="rounded-2xl border border-[#EBEBEB] px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span className="text-[14px] font-medium">{author}</span>
+        {editing ? null : <span className="text-[13px] text-[#717171]">{criteriaName}</span>}
+        {editing ? null : <SeverityPill severity={item.severity} />}
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          {!editing && manager && item.status !== "draft" ? (
+            <select
+              className="h-8 rounded-lg border border-[#EBEBEB] bg-white px-2 text-[13px]"
+              aria-label="Feedback status"
+              value={item.status}
+              onChange={(event) => {
+                void setFeedbackStatus(item.id, event.target.value as Exclude<FeedbackStatus, "draft">).then((result) => {
+                  if (!result.ok) toast.error(result.message)
+                })
+              }}
+            >
+              {STATUSES.map((status) => (
+                <option key={status} value={status}>{status[0].toUpperCase() + status.slice(1)}</option>
+              ))}
+            </select>
+          ) : null}
+          {!editing && !manager ? <span className="text-[12px] capitalize text-[#717171]">{item.status}</span> : null}
+          {canEdit && !editing ? (
+            <button type="button" className={cn("grid size-8 place-items-center rounded-full text-[#222] hover:bg-[#F7F7F7]", tap)} aria-label="Edit feedback" onClick={startEdit}>
+              <Pencil className="size-4" />
+            </button>
+          ) : null}
+        </span>
       </div>
       {editing ? (
         <div>
@@ -274,31 +308,11 @@ function Note({
         </div>
       ) : (
         <>
-          <p className="mt-2 text-[14px] leading-6">{item.observation}</p>
-          {item.recommendation ? <p className="mt-1 text-[14px] text-[#717171]">Recommendation: {item.recommendation}</p> : null}
+          <p className="mt-2 text-[14px] leading-5">{item.observation}</p>
+          {item.recommendation ? <p className="mt-1 text-[13px] leading-5 text-[#717171]">{item.recommendation}</p> : null}
           {item.figmaLink ? (
-            <a href={item.figmaLink} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-semibold underline">Figma comment</a>
+            <a href={item.figmaLink} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[13px] font-medium underline">Figma comment</a>
           ) : null}
-          {manager && item.status !== "draft" ? (
-            <div className="mt-3 flex flex-wrap gap-1">
-              {STATUSES.map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  className={cn("chip capitalize", item.status === status && "chip-on", tap)}
-                  onClick={() => {
-                    void setFeedbackStatus(item.id, status).then((result) => {
-                      if (!result.ok) toast.error(result.message)
-                    })
-                  }}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-[12px] capitalize text-[#717171]">{item.status}</p>
-          )}
         </>
       )}
     </li>
