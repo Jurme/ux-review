@@ -239,7 +239,7 @@ function Note({
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {!editing && manager && item.status !== "draft" ? (
             <select
-              className="h-8 rounded-lg border border-[#EBEBEB] bg-white px-2 text-[13px]"
+              className="h-8 rounded-lg border border-[#EBEBEB] bg-white pl-2 text-[13px]"
               aria-label="Feedback status"
               value={item.status}
               onChange={(event) => {

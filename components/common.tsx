@@ -187,7 +187,7 @@ export function NativeSelect({ className, children, ...props }: ComponentProps<"
       >
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-[#717171]" />
+      <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 text-[#717171]" />
     </div>
   )
 }

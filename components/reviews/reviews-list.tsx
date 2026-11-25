@@ -257,7 +257,7 @@ function Filter({
   return (
     <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#EBEBEB] bg-white px-3 text-[13px]">
       <span className="text-[#717171]">{label}</span>
-      <select className="bg-transparent pr-1 outline-none" value={value} onChange={(event) => onChange(event.target.value)} aria-label={label}>
+      <select className="bg-transparent outline-none" value={value} onChange={(event) => onChange(event.target.value)} aria-label={label}>
         <option value="all">All</option>
         {options.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>

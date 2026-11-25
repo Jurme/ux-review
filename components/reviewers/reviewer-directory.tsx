@@ -85,7 +85,7 @@ export function ReviewerDirectory() {
                     <td className="px-4 py-3">
                       {user.role === "admin" ? (
                         <select
-                          className="h-9 rounded-lg border border-[#EBEBEB] bg-white px-2"
+                          className="h-9 rounded-lg border border-[#EBEBEB] bg-white pl-2"
                           value={person.role}
                           aria-label={`Role for ${person.name}`}
                           onChange={(event) => {
