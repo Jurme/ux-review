@@ -39,7 +39,7 @@ export function ReviewSummary({
   return (
     <Link
       href={href}
-      className="block rounded-xl border border-[#EBEBEB] bg-white px-4 py-3 transition-colors duration-150 hover:bg-[var(--hover)]"
+      className="block py-4 transition-colors duration-150 hover:bg-[var(--hover)]"
     >
       <span className="flex items-center justify-between gap-3">
         <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight text-[#222]">{title}</span>

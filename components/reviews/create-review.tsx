@@ -143,7 +143,7 @@ function SendForm() {
 
   return (
     <div className="mx-auto w-full max-w-[1180px] px-5 pt-14 pb-8 md:px-10 md:pt-16 md:pb-10">
-      <div className="max-w-[720px]">
+      <div className="mx-auto max-w-[720px]">
       <h1 className="text-[28px] font-semibold tracking-tight text-[#222]">Send a design for review</h1>
       <p className="mt-1 text-[14px] text-[#717171]">
         {due === today
