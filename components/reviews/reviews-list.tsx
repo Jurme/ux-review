@@ -1,11 +1,11 @@
 "use client"
 
-import Link from "next/link"
 import { SendDesignLink } from "@/components/reviews/create-review"
 import { ReviewRoleToggle, type ReviewBucket } from "@/components/reviews/role-toggle"
 import { useEffect, useMemo, useState } from "react"
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react"
-import { AvatarStack, PageHeader, pageWrap, ProgressBar } from "@/components/common"
+import { PageHeader, pageWrap } from "@/components/common"
+import { ReviewSummary } from "@/components/reviews/review-summary"
 import { buttonVariants } from "@/components/ui/button"
 import { canSeeReview, completionOf, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
 import { addDaysISO, dateInTimeZone, formatDay, formatWeekday, parseISODate, windowLabel } from "@/lib/format"
@@ -169,23 +169,20 @@ function ReviewGroup({
             const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
             return (
               <li key={review.id}>
-                <Link href={`/reviews/${review.id}`} className="grid gap-3 py-4 md:grid-cols-[minmax(0,1.4fr)_160px_160px_150px] md:items-center">
-                  <span>
-                    <span className="block font-medium">{review.title}</span>
+                <ReviewSummary
+                  href={`/reviews/${review.id}`}
+                  title={review.title}
+                  users={reviewers}
+                  progress={completionOf(review)}
+                  caption={`${review.reviewers.filter((item) => item.status === "completed").length}/${review.reviewers.length || 0} finished · due ${formatDay(review.deadline)}`}
+                  detail={
                     <span className="mt-1 block text-[13px] text-[#717171]">
                       {review.project}
                       {review.feature ? ` · ${review.feature}` : ""} · {windowLabel(review.startDate, review.deadline)} · {owner?.name}
                     </span>
-                  </span>
-                  <AvatarStack users={reviewers} />
-                  <span>
-                    <ProgressBar value={completionOf(review)} />
-                    <span className="mt-1 block text-[12px] text-[#717171]">
-                      {review.reviewers.filter((item) => item.status === "completed").length}/{review.reviewers.length || 0} finished · due {formatDay(review.deadline)}
-                    </span>
-                  </span>
-                  <ListStatusPill status={reviewListStatus(review.id, feedback, review.ownerId)} />
-                </Link>
+                  }
+                  status={<ListStatusPill status={reviewListStatus(review.id, feedback, review.ownerId)} />}
+                />
               </li>
             )
           })}

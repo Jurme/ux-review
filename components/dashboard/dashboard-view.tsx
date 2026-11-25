@@ -5,7 +5,8 @@ import { useState } from "react"
 import { SendDesignLink } from "@/components/reviews/create-review"
 import { ReviewRoleToggle, type ReviewBucket } from "@/components/reviews/role-toggle"
 import { Plus } from "lucide-react"
-import { AvatarStack, PageHeader, pageWrap, ProgressBar } from "@/components/common"
+import { PageHeader, pageWrap } from "@/components/common"
+import { ReviewSummary } from "@/components/reviews/review-summary"
 import { buttonVariants } from "@/components/ui/button"
 import { assignmentFor, canSeeReview, completionOf, reviewBucket, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
 import { formatDay, formatLongDate, greeting, timeAgo } from "@/lib/format"
@@ -105,27 +106,30 @@ export function DashboardView() {
                 const status = reviewListStatus(review.id, feedback, review.ownerId)
                 return (
                   <li key={review.id}>
-                    <Link href={`/reviews/${review.id}`} className="flex flex-wrap items-center gap-4 py-4">
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{review.title}</span>
-                        <span className="mt-1 block text-[13px] text-[#717171]">
-                          {review.project}
-                          {review.feature ? ` · ${review.feature}` : ""} · Sent {formatDay(review.startDate)}
+                    <ReviewSummary
+                      href={`/reviews/${review.id}`}
+                      title={review.title}
+                      users={reviewers}
+                      progress={completionOf(review)}
+                      caption={`${completionOf(review)}%`}
+                      detail={
+                        <>
+                          <span className="mt-1 block text-[13px] text-[#717171]">
+                            {review.project}
+                            {review.feature ? ` · ${review.feature}` : ""} · Sent {formatDay(review.startDate)}
+                          </span>
+                          <span className="mt-2 block text-[13px] text-[#717171]">
+                            {owner ? owner.name : "Unknown owner"} · {review.reviewers.length} reviewer{review.reviewers.length === 1 ? "" : "s"}
+                          </span>
+                        </>
+                      }
+                      status={
+                        <span className="inline-flex items-center gap-1.5 text-[13px] text-[#222]">
+                          <span className={cn("size-2 rounded-full", STATUS_META[status].dot)} />
+                          {STATUS_META[status].label}
                         </span>
-                        <span className="mt-2 block text-[13px] text-[#717171]">
-                          {owner ? owner.name : "Unknown owner"} · {review.reviewers.length} reviewer{review.reviewers.length === 1 ? "" : "s"}
-                        </span>
-                      </span>
-                      <AvatarStack users={reviewers} />
-                      <span className="w-28">
-                        <ProgressBar value={completionOf(review)} />
-                        <span className="mt-1 block text-[12px] text-[#717171]">{completionOf(review)}%</span>
-                      </span>
-                      <span className="inline-flex items-center gap-1.5 text-[13px] text-[#222]">
-                        <span className={cn("size-2 rounded-full", STATUS_META[status].dot)} />
-                        {STATUS_META[status].label}
-                      </span>
-                    </Link>
+                      }
+                    />
                   </li>
                 )
               })
