@@ -81,7 +81,7 @@ function SendForm() {
     setQuery("")
   }
 
-  async function submit(mode: "draft" | "publish") {
+  async function submit() {
     const startDate = todayISO()
     const draft: ReviewDraft = {
       title,
@@ -102,7 +102,7 @@ function SendForm() {
       criteriaIds: [],
       reviewers: selectedIds.map((userId) => ({ userId, focus: "General" })),
     }
-    const result = await saveReview(draft, mode)
+    const result = await saveReview(draft, "publish")
     if (!result.ok) {
       toast.error(result.message)
       return
@@ -208,8 +208,7 @@ function SendForm() {
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <button type="button" className={cn("btn", tap)} onClick={() => router.back()}>Cancel</button>
-          <button type="button" className={cn("btn", tap)} onClick={() => submit("draft")}>Save as draft</button>
-          <button type="button" className={cn("btn btn-primary", tap)} onClick={() => submit("publish")}>Send to reviewers</button>
+          <button type="button" className={cn("btn btn-primary", tap)} onClick={() => submit()}>Send to reviewers</button>
         </div>
       </form>
     </div>

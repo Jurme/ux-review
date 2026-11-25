@@ -562,16 +562,19 @@ export function duplicateCriterion(state: AppState, id: string): Mutation {
 }
 
 export function deleteCriterion(state: AppState, id: string): Mutation {
-  const used = state.reviews.some((review) => review.criteriaIds.includes(id))
-  if (used) return same(state, "A review still uses this criterion. Deactivate it instead.")
+  if (!state.criteria.some((item) => item.id === id)) return same(state, "That criterion is no longer here.")
   return done({
     ...state,
     criteria: state.criteria.filter((item) => item.id !== id),
+    reviews: state.reviews.map((review) => ({
+      ...review,
+      criteriaIds: review.criteriaIds.filter((item) => item !== id),
+    })),
     templates: state.templates.map((template) => ({
       ...template,
       criteriaIds: template.criteriaIds.filter((item) => item !== id),
     })),
-  }, "Criterion deleted.")
+  }, "Criterion removed.")
 }
 
 export function reorderCriterion(state: AppState, id: string, direction: -1 | 1): Mutation {
@@ -700,9 +703,26 @@ export function addProject(state: AppState, name: string): Mutation {
   return done({ ...state, workspace: { ...state.workspace, projects: [...state.workspace.projects, project] } }, "Project added.")
 }
 
+export function renameProject(state: AppState, from: string, to: string): Mutation {
+  const user = actor(state)
+  if (!user) return same(state, "Sign in to edit a project.")
+  const nextName = clip(to, 80)
+  if (!nextName) return same(state, "Enter a project name.")
+  if (!state.workspace.projects.includes(from)) return same(state, "That project is no longer here.")
+  if (state.workspace.projects.some((item) => item !== from && item.toLowerCase() === nextName.toLowerCase())) {
+    return same(state, "That project already exists.")
+  }
+  return done({
+    ...state,
+    workspace: { ...state.workspace, projects: state.workspace.projects.map((item) => (item === from ? nextName : item)) },
+    reviews: state.reviews.map((review) => (review.project === from ? { ...review, project: nextName } : review)),
+  }, "Project updated.")
+}
+
 export function removeProject(state: AppState, name: string): Mutation {
   const user = actor(state)
-  if (!user || user.role !== "admin") return same(state, "Only an admin can remove a project.")
+  if (!user) return same(state, "Sign in to remove a project.")
+  if (!state.workspace.projects.includes(name)) return same(state, "That project is no longer here.")
   return done({
     ...state,
     workspace: { ...state.workspace, projects: state.workspace.projects.filter((item) => item !== name) },

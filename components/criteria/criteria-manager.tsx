@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { ArrowDown, ArrowUp, Copy, Plus } from "lucide-react"
 import { toast } from "sonner"
-import { EmptyState, Field, NativeSelect, PageHeader, pageWrap } from "@/components/common"
+import { ConfirmDialog, EmptyState, Field, NativeSelect, PageHeader, pageWrap } from "@/components/common"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -38,6 +38,7 @@ const blank = (): CriterionDraft => ({
 export function CriteriaManager() {
   const { criteria, reviews, user } = useWorkspace()
   const [draft, setDraft] = useState<CriterionDraft | null>(null)
+  const [removeId, setRemoveId] = useState<string | null>(null)
   if (!user) return null
 
   const shown = [...criteria].sort((a, b) => a.order - b.order)
@@ -88,10 +89,12 @@ export function CriteriaManager() {
                   <span className="mt-1 block text-[14px] leading-6 text-[#717171]">{item.description}</span>
                   <span className="mt-1 block text-[12px] text-[#717171]">Used by {used} review{used === 1 ? "" : "s"}</span>
                 </button>
-                <span className="flex items-center gap-1">
+                <span className="flex flex-wrap items-center gap-1">
                   <IconButton label="Move up" disabled={index === 0} onClick={() => act(reorderCriterion(item.id, -1))}><ArrowUp className="size-4" /></IconButton>
                   <IconButton label="Move down" disabled={index === shown.length - 1} onClick={() => act(reorderCriterion(item.id, 1))}><ArrowDown className="size-4" /></IconButton>
                   <IconButton label="Duplicate" onClick={() => act(duplicateCriterion(item.id))}><Copy className="size-4" /></IconButton>
+                  <Button variant="ghost" size="sm" type="button" onClick={() => open(item)}>Edit</Button>
+                  <Button variant="ghost" size="sm" type="button" className="text-[#D93B3B]" onClick={() => setRemoveId(item.id)}>Remove</Button>
                 </span>
               </li>
             )
@@ -100,12 +103,12 @@ export function CriteriaManager() {
       )}
 
       <Sheet open={draft !== null} onOpenChange={(open) => { if (!open) setDraft(null) }}>
-        <SheetContent className="overflow-y-auto">
+        <SheetContent>
           {draft ? (
-            <div className="space-y-4">
-              <SheetHeader>
-                <SheetTitle>{draft.id ? "Edit criterion" : "New criterion"}</SheetTitle>
-                <SheetDescription>Say what to evaluate, then give reviewers the questions to ask.</SheetDescription>
+            <div className="flex flex-col gap-5 px-6 py-6">
+              <SheetHeader className="gap-2 p-0 pr-10">
+                <SheetTitle className="text-[22px]">{draft.id ? "Edit criterion" : "New criterion"}</SheetTitle>
+                <SheetDescription className="text-[14px] leading-6">Say what to evaluate, then give reviewers the questions to ask.</SheetDescription>
               </SheetHeader>
               <Field label="Name">
                 <Input value={draft.name} maxLength={80} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
@@ -122,24 +125,38 @@ export function CriteriaManager() {
                   {PRIORITIES.map((item) => <option key={item} value={item}>{item}</option>)}
                 </NativeSelect>
               </Field>
-              <label className="flex items-center justify-between text-[14px]">
+              <label className="flex items-center justify-between gap-4 py-1 text-[14px]">
                 Active
-                <button type="button" role="switch" aria-checked={draft.active} onClick={() => setDraft({ ...draft, active: !draft.active })} className={cn("relative h-6 w-11 rounded-full", tap, draft.active ? "bg-[#222]" : "bg-[#D6D6D6]")}>
+                <button type="button" role="switch" aria-checked={draft.active} onClick={() => setDraft({ ...draft, active: !draft.active })} className={cn("relative h-6 w-11 shrink-0 rounded-full", tap, draft.active ? "bg-[#222]" : "bg-[#D6D6D6]")}>
                   <span className={cn("absolute top-0.5 size-5 rounded-full bg-white", draft.active ? "left-5" : "left-0.5")} />
                 </button>
               </label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 pt-1 pb-4">
                 <Button onClick={() => { void (async () => { const result = await act(saveCriterion(draft)); if (result?.ok) setDraft(null) })() }}>Save</Button>
-                {draft.id ? (
-                  <Button variant="ghost" className="text-[#D93B3B]" onClick={() => { void (async () => { const result = await act(deleteCriterion(draft.id!)); if (result?.ok) setDraft(null) })() }}>
-                    Delete
-                  </Button>
-                ) : null}
+                <Button variant="ghost" type="button" onClick={() => setDraft(null)}>Cancel</Button>
               </div>
             </div>
           ) : null}
         </SheetContent>
       </Sheet>
+      <ConfirmDialog
+        open={removeId !== null}
+        title="Remove this criterion?"
+        body={shown.find((item) => item.id === removeId) ? `${shown.find((item) => item.id === removeId)?.name} will leave the list for new reviews.` : "This criterion will leave the list."}
+        confirmLabel="Remove criterion"
+        onClose={() => setRemoveId(null)}
+        onConfirm={() => {
+          const id = removeId
+          if (!id) return
+          void (async () => {
+            const result = await act(deleteCriterion(id))
+            if (result?.ok) {
+              setRemoveId(null)
+              if (draft?.id === id) setDraft(null)
+            }
+          })()
+        }}
+      />
     </div>
   )
 }

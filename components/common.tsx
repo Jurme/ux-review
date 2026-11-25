@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react"
-import type { ComponentProps, ReactNode } from "react"
+import { useEffect, type ComponentProps, type ReactNode } from "react"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { avatarColor, initials, PHASE_META, REVIEWER_META, SEVERITY_META, tap } from "@/lib/presentation"
 import type { Phase, ReviewerStatus, Severity, User } from "@/lib/types"
@@ -210,6 +211,46 @@ export function TextButton({
       {...props}
       className={cn("text-[13px] font-medium text-[#222] underline-offset-4 hover:underline", tap, className)}
     />
+  )
+}
+
+export function ConfirmDialog({
+  open,
+  title,
+  body,
+  confirmLabel,
+  onConfirm,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  body: string
+  confirmLabel: string
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, onClose])
+
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-end px-4 py-6 sm:place-items-center">
+      <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-labelledby="confirm-title" className="relative w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-[0_12px_40px_rgba(0,0,0,0.18)]">
+        <h2 id="confirm-title" className="text-[18px] font-semibold tracking-tight text-[#222]">{title}</h2>
+        <p className="mt-2 text-[14px] leading-6 text-[#717171]">{body}</p>
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button type="button" onClick={onConfirm}>{confirmLabel}</Button>
+        </div>
+      </div>
+    </div>
   )
 }
 

@@ -229,6 +229,10 @@ export function addProject(name: string) {
   return run("addProject", [name])
 }
 
+export function renameProject(from: string, to: string) {
+  return run("renameProject", [from, to])
+}
+
 export function removeProject(name: string) {
   return run("removeProject", [name])
 }

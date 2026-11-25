@@ -89,6 +89,7 @@ const actions = {
   updateProfile: mutations.updateProfile,
   updateWorkspace: mutations.updateWorkspace,
   addProject: mutations.addProject,
+  renameProject: mutations.renameProject,
   removeProject: mutations.removeProject,
   setTheme: mutations.setTheme,
   markRead: mutations.markRead,

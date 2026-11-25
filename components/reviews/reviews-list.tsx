@@ -7,17 +7,24 @@ import { Plus, Search } from "lucide-react"
 import { AvatarStack, EmptyState, PageHeader, PhasePill, pageWrap, ProgressBar } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { canSeeReview, completionOf, phaseOf } from "@/lib/domain"
+import { canSeeReview, completionOf, phaseOf, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
 import { formatDay, windowLabel } from "@/lib/format"
 import { PHASE_META, PHASE_ORDER, tap } from "@/lib/presentation"
 import { useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import type { Phase } from "@/lib/types"
 
+const LIST_STATUS: Record<ReviewListStatus, { label: string; chip: string; dot: string }> = {
+  pending: { label: "Pending review", chip: "bg-[#F7F7F7] text-[#717171]", dot: "bg-[#999]" },
+  in_progress: { label: "In progress", chip: "bg-[#FFF1D6] text-[#B7791F]", dot: "bg-[#B7791F]" },
+  completed: { label: "Completed", chip: "bg-[#DCF5EA] text-[#008A5B]", dot: "bg-[#008A5B]" },
+}
+
 export function ReviewsList({ archive = false }: { archive?: boolean }) {
-  const { user, users, reviews } = useWorkspace()
+  const { user, users, reviews, feedback } = useWorkspace()
   const [query, setQuery] = useState("")
   const [phase, setPhase] = useState<Phase | "all">("all")
+  const [listStatus, setListStatus] = useState<ReviewListStatus | "all">("all")
   const [project, setProject] = useState("all")
   const people = useMemo(() => new Map(users.map((person) => [person.id, person])), [users])
   if (!user) return null
@@ -25,8 +32,8 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
   const projects = [...new Set(reviews.map((review) => review.project))].sort()
   const filtered = reviews
     .filter((review) => canSeeReview(user, review))
-    .filter((review) => (archive ? review.lifecycle === "archived" || review.lifecycle === "completed" : review.lifecycle !== "archived"))
-    .filter((review) => (phase === "all" ? true : phaseOf(review) === phase))
+    .filter((review) => (archive ? review.lifecycle === "archived" || review.lifecycle === "completed" : review.lifecycle !== "archived" && review.lifecycle !== "draft"))
+    .filter((review) => (archive ? (phase === "all" ? true : phaseOf(review) === phase) : listStatus === "all" ? true : reviewListStatus(review.id, feedback) === listStatus))
     .filter((review) => (project === "all" ? true : review.project === project))
     .filter((review) => {
       const haystack = `${review.title} ${review.project} ${review.feature} ${review.description}`.toLowerCase()
@@ -44,7 +51,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
         description={
           archive
             ? "Closed and archived reviews stay here with their criteria, reviewers, and notes."
-            : "Every review the workspace is running, including drafts only you and other admins can see."
+            : "Every design that has been sent. Pending means no one has reviewed it yet. In progress means at least one person has. Completed means at least three people have."
         }
         action={
           archive ? undefined : (
@@ -73,19 +80,32 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
       </div>
 
       <div className="mt-4 flex gap-2 overflow-x-auto">
-        <FilterChip active={phase === "all"} onClick={() => setPhase("all")}>All</FilterChip>
-        {phases.map((item) => (
-          <FilterChip key={item} active={phase === item} onClick={() => setPhase(item)}>
-            {PHASE_META[item].label}
-          </FilterChip>
-        ))}
+        {archive ? (
+          <>
+            <FilterChip active={phase === "all"} onClick={() => setPhase("all")}>All</FilterChip>
+            {phases.map((item) => (
+              <FilterChip key={item} active={phase === item} onClick={() => setPhase(item)}>
+                {PHASE_META[item].label}
+              </FilterChip>
+            ))}
+          </>
+        ) : (
+          <>
+            <FilterChip active={listStatus === "all"} onClick={() => setListStatus("all")}>All</FilterChip>
+            {(Object.keys(LIST_STATUS) as ReviewListStatus[]).map((item) => (
+              <FilterChip key={item} active={listStatus === item} onClick={() => setListStatus(item)}>
+                {LIST_STATUS[item].label}
+              </FilterChip>
+            ))}
+          </>
+        )}
       </div>
 
       {filtered.length === 0 ? (
         <div className="mt-8">
           <EmptyState
-            title={query || phase !== "all" || project !== "all" ? "No reviews match" : archive ? "Nothing archived yet" : "No reviews yet"}
-            body={query || phase !== "all" || project !== "all" ? "Try another word, or clear the filters." : "Create a review, add a Figma link, and invite the people who should respond."}
+            title={query || (archive ? phase !== "all" : listStatus !== "all") || project !== "all" ? "No reviews match" : archive ? "Nothing archived yet" : "No reviews yet"}
+            body={query || (archive ? phase !== "all" : listStatus !== "all") || project !== "all" ? "Try another word, or clear the filters." : "Send a design, add a Figma link, and invite the people who should respond."}
           />
         </div>
       ) : (
@@ -95,7 +115,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
             const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
             return (
               <li key={review.id}>
-                <Link href={`/reviews/${review.id}`} className="grid gap-3 py-4 md:grid-cols-[minmax(0,1.4fr)_160px_140px_120px] md:items-center">
+                <Link href={`/reviews/${review.id}`} className="grid gap-3 py-4 md:grid-cols-[minmax(0,1.4fr)_160px_160px_150px] md:items-center">
                   <span>
                     <span className="block font-medium">{review.title}</span>
                     <span className="mt-1 block text-[13px] text-[#717171]">
@@ -110,7 +130,7 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
                       {review.reviewers.filter((item) => item.status === "completed").length}/{review.reviewers.length || 0} finished · due {formatDay(review.deadline)}
                     </span>
                   </span>
-                  <PhasePill phase={phaseOf(review)} />
+                  {archive ? <PhasePill phase={phaseOf(review)} /> : <ListStatusPill status={reviewListStatus(review.id, feedback)} />}
                 </Link>
               </li>
             )
@@ -118,6 +138,16 @@ export function ReviewsList({ archive = false }: { archive?: boolean }) {
         </ul>
       )}
     </div>
+  )
+}
+
+function ListStatusPill({ status }: { status: ReviewListStatus }) {
+  const meta = LIST_STATUS[status]
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium", meta.chip)}>
+      <span className={cn("size-1.5 rounded-full", meta.dot)} />
+      {meta.label}
+    </span>
   )
 }
 

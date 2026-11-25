@@ -55,6 +55,19 @@ export function visibleFeedback(review: Review, user: User | null, feedback: Fee
   })
 }
 
+export type ReviewListStatus = "pending" | "in_progress" | "completed"
+
+export function reviewListStatus(reviewId: string, feedback: Feedback[]): ReviewListStatus {
+  const people = new Set(
+    feedback
+      .filter((item) => item.reviewId === reviewId && item.status !== "draft")
+      .map((item) => item.authorId),
+  )
+  if (people.size >= 3) return "completed"
+  if (people.size >= 1) return "in_progress"
+  return "pending"
+}
+
 export function submittedCount(feedback: Feedback[], reviewId: string, userId?: string) {
   return feedback.filter(
     (item) =>
