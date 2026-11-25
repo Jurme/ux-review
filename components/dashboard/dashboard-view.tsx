@@ -3,58 +3,38 @@
 import Link from "next/link"
 import { SendDesignLink } from "@/components/reviews/create-review"
 import { Plus } from "lucide-react"
-import { AvatarStack, PageHeader, PhasePill, pageWrap, ProgressBar } from "@/components/common"
+import { AvatarStack, PageHeader, pageWrap, ProgressBar } from "@/components/common"
 import { buttonVariants } from "@/components/ui/button"
-import { timezoneLabel } from "@/lib/constants"
-import { assignmentFor, canSeeReview, completionOf, phaseOf } from "@/lib/domain"
-import { formatDay, formatLongDate, greeting, timeAgo, todayISO, windowLabel } from "@/lib/format"
-import { PHASE_META } from "@/lib/presentation"
+import { assignmentFor, canSeeReview, completionOf, reviewListStatus, type ReviewListStatus } from "@/lib/domain"
+import { formatDay, formatLongDate, greeting, timeAgo } from "@/lib/format"
 import { useWorkspace } from "@/lib/store"
 import { cn } from "@/lib/utils"
-import type { Phase } from "@/lib/types"
 
-const barPhases: Phase[] = ["scheduled", "in_progress", "feedback_pending", "completed"]
+const STATUS_ORDER: ReviewListStatus[] = ["pending", "in_progress", "completed"]
+const STATUS_META: Record<ReviewListStatus, { label: string; dot: string }> = {
+  pending: { label: "Pending review", dot: "bg-[#2B7FFF]" },
+  in_progress: { label: "In progress", dot: "bg-[#E08A00]" },
+  completed: { label: "Completed", dot: "bg-[#008A5B]" },
+}
 
 export function DashboardView() {
-  const { user, users, reviews, activities, workspace, criteria } = useWorkspace()
+  const { user, users, reviews, feedback, activities, workspace, criteria } = useWorkspace()
   if (!user || !workspace) return null
   const people = new Map(users.map((person) => [person.id, person]))
-  const visible = reviews.filter((review) => canSeeReview(user, review))
-  const open = visible.filter((review) => review.lifecycle === "open" || review.lifecycle === "draft")
+  const visible = reviews.filter((review) => canSeeReview(user, review) && review.lifecycle !== "draft" && review.lifecycle !== "archived")
   const needsYou = visible.filter((review) => {
     const mine = assignmentFor(review, user.id)
-    const phase = phaseOf(review)
-    return mine && mine.status !== "completed" && (phase === "in_progress" || phase === "feedback_pending")
+    return review.lifecycle === "open" && mine && mine.status !== "completed" && reviewListStatus(review.id, feedback) !== "completed"
   })
   const coming = visible
-    .filter((review) => {
-      const phase = phaseOf(review)
-      return phase === "scheduled" || phase === "in_progress" || phase === "feedback_pending"
-    })
-    .sort((a, b) => a.deadline.localeCompare(b.deadline))
+    .filter((review) => reviewListStatus(review.id, feedback) !== "completed")
+    .sort((a, b) => b.startDate.localeCompare(a.startDate))
     .slice(0, 4)
-  const stats = [
-    { label: "Total reviews", value: visible.filter((review) => review.lifecycle !== "archived").length },
-    { label: "Upcoming", value: visible.filter((review) => phaseOf(review) === "scheduled").length },
-    { label: "In progress", value: visible.filter((review) => {
-      const phase = phaseOf(review)
-      return phase === "in_progress" || phase === "feedback_pending"
-    }).length },
-    { label: "Completed", value: visible.filter((review) => phaseOf(review) === "completed").length },
-    {
-      label: "Pending feedback",
-      value: visible
-        .filter((review) => {
-          const phase = phaseOf(review)
-          return phase === "in_progress" || phase === "feedback_pending"
-        })
-        .reduce((sum, review) => sum + review.reviewers.filter((reviewer) => reviewer.status !== "completed").length, 0),
-    },
-  ]
-  const counted = visible.filter((review) => barPhases.includes(phaseOf(review)))
+  const counts = Object.fromEntries(STATUS_ORDER.map((status) => [status, visible.filter((review) => reviewListStatus(review.id, feedback) === status).length])) as Record<ReviewListStatus, number>
+  const stats = STATUS_ORDER.map((status) => ({ label: STATUS_META[status].label, value: counts[status] }))
   const line =
     needsYou.length === 0
-      ? "Nothing is waiting on you. Open reviews are ordered by the soonest deadline."
+      ? "Nothing is waiting on your feedback."
       : needsYou.length === 1
         ? `You have one review waiting: ${needsYou[0].title}.`
         : `You have ${needsYou.length} reviews waiting on your feedback.`
@@ -97,7 +77,7 @@ export function DashboardView() {
                   <span>
                     <span className="block font-medium">{review.title}</span>
                     <span className="mt-0.5 block text-[13px] text-[#717171]">
-                      {review.project} · Due {formatDay(review.deadline)} · {assignmentFor(review, user.id)?.focus}
+                      {review.project} · Sent {formatDay(review.startDate)} · {assignmentFor(review, user.id)?.focus}
                     </span>
                   </span>
                   <span className="shrink-0 text-[13px] font-medium text-[#FF385C]">Give feedback</span>
@@ -108,9 +88,9 @@ export function DashboardView() {
         </section>
       ) : null}
 
-      <section className="mt-8 grid grid-cols-2 overflow-hidden rounded-2xl border border-[#EBEBEB] sm:grid-cols-3 lg:grid-cols-5">
+      <section className="mt-8 grid grid-cols-1 overflow-hidden rounded-2xl border border-[#EBEBEB] sm:grid-cols-3">
         {stats.map((stat, index) => (
-          <div key={stat.label} className={cn("bg-white px-5 py-4", index > 0 && "border-[#EBEBEB] lg:border-l", index % 2 === 1 && "border-l sm:border-l", index > 1 && "border-t sm:border-t-0")}>
+          <div key={stat.label} className={cn("bg-white px-5 py-4", index > 0 && "border-t border-[#EBEBEB] sm:border-t-0 sm:border-l")}>
             <p className="text-[13px] text-[#717171]">{stat.label}</p>
             <p className="mt-2 text-[28px] font-semibold tracking-tight">{stat.value}</p>
           </div>
@@ -120,19 +100,20 @@ export function DashboardView() {
       <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
         <section>
           <div className="flex items-baseline justify-between">
-            <h2 className="text-[18px] font-semibold tracking-tight">Coming up</h2>
-            <Link href="/calendar" className="text-[13px] font-medium text-[#222] underline-offset-4 hover:underline">
-              Calendar
+            <h2 className="text-[18px] font-semibold tracking-tight">Open reviews</h2>
+            <Link href="/reviews" className="text-[13px] font-medium text-[#222] underline-offset-4 hover:underline">
+              All reviews
             </Link>
           </div>
-          <p className="mt-1 text-[13px] text-[#717171]">Open windows, soonest deadline first. These are not meetings.</p>
+          <p className="mt-1 text-[13px] text-[#717171]">Reviews that are still pending or in progress.</p>
           <ul className="mt-4 divide-y divide-[#EBEBEB]">
             {coming.length === 0 ? (
-              <li className="py-8 text-[14px] text-[#717171]">No open reviews. Create one from the calendar.</li>
+              <li className="py-8 text-[14px] text-[#717171]">Nothing is waiting. Send a design when you have one ready.</li>
             ) : (
               coming.map((review) => {
                 const owner = people.get(review.ownerId)
                 const reviewers = review.reviewers.map((item) => people.get(item.userId)).filter((item) => item !== undefined)
+                const status = reviewListStatus(review.id, feedback)
                 return (
                   <li key={review.id}>
                     <Link href={`/reviews/${review.id}`} className="flex flex-wrap items-center gap-4 py-4">
@@ -140,13 +121,7 @@ export function DashboardView() {
                         <span className="block font-medium">{review.title}</span>
                         <span className="mt-1 block text-[13px] text-[#717171]">
                           {review.project}
-                          {review.feature ? ` · ${review.feature}` : ""} ·{" "}
-                          {review.deadline < todayISO() ? (
-                            <span className="text-[#8A5A12]">Overdue {formatDay(review.deadline)}</span>
-                          ) : (
-                            windowLabel(review.startDate, review.deadline)
-                          )}{" "}
-                          · {timezoneLabel(review.timezone)}
+                          {review.feature ? ` · ${review.feature}` : ""} · Sent {formatDay(review.startDate)}
                         </span>
                         <span className="mt-2 block text-[13px] text-[#717171]">
                           {owner ? owner.name : "Unknown owner"} · {review.reviewers.length} reviewer{review.reviewers.length === 1 ? "" : "s"}
@@ -157,7 +132,10 @@ export function DashboardView() {
                         <ProgressBar value={completionOf(review)} />
                         <span className="mt-1 block text-[12px] text-[#717171]">{completionOf(review)}%</span>
                       </span>
-                      <PhasePill phase={phaseOf(review)} />
+                      <span className="inline-flex items-center gap-1.5 text-[13px] text-[#222]">
+                        <span className={cn("size-2 rounded-full", STATUS_META[status].dot)} />
+                        {STATUS_META[status].label}
+                      </span>
                     </Link>
                   </li>
                 )
@@ -192,34 +170,30 @@ export function DashboardView() {
           <section>
             <h2 className="text-[18px] font-semibold tracking-tight">Completion</h2>
             <p className="mt-1 text-[13px] text-[#717171]">
-              {counted.length} review{counted.length === 1 ? "" : "s"} outside drafts and the archive. {open.filter((review) => review.lifecycle === "draft").length} still in draft.
+              {visible.length} review{visible.length === 1 ? "" : "s"}. Pending until someone responds. In progress after the first response. Completed after three.
             </p>
             <div className="mt-4 flex h-2 overflow-hidden rounded-full bg-[#F7F7F7]">
-              {barPhases.map((phase) => {
-                const count = counted.filter((review) => phaseOf(review) === phase).length
-                if (!count || counted.length === 0) return null
+              {STATUS_ORDER.map((status) => {
+                if (!counts[status] || visible.length === 0) return null
                 return (
                   <div
-                    key={phase}
-                    className={PHASE_META[phase].dot}
-                    style={{ width: `${(count / counted.length) * 100}%` }}
+                    key={status}
+                    className={STATUS_META[status].dot}
+                    style={{ width: `${(counts[status] / visible.length) * 100}%` }}
                   />
                 )
               })}
             </div>
             <ul className="mt-4 space-y-2">
-              {barPhases.map((phase) => {
-                const count = counted.filter((review) => phaseOf(review) === phase).length
-                return (
-                  <li key={phase} className="flex items-center justify-between text-[13px]">
-                    <span className="flex items-center gap-2">
-                      <span className={cn("size-2 rounded-full", PHASE_META[phase].dot)} />
-                      {PHASE_META[phase].label}
-                    </span>
-                    <span className="text-[#717171]">{count}</span>
-                  </li>
-                )
-              })}
+              {STATUS_ORDER.map((status) => (
+                <li key={status} className="flex items-center justify-between text-[13px]">
+                  <span className="flex items-center gap-2">
+                    <span className={cn("size-2 rounded-full", STATUS_META[status].dot)} />
+                    {STATUS_META[status].label}
+                  </span>
+                  <span className="text-[#717171]">{counts[status]}</span>
+                </li>
+              ))}
             </ul>
           </section>
         </div>
