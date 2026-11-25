@@ -35,7 +35,7 @@ export function SettingsView() {
   if (!user || !workspace) return null
 
   return (
-    <div className={pageWrap("max-w-[960px]")}>
+    <div className={pageWrap()}>
       <PageHeader
         eyebrow="Workspace"
         title="Settings"
@@ -139,8 +139,8 @@ export function SettingsView() {
           />
         </section>
       ) : null}
-      {tab === "people" ? <div className="-mx-6 md:-mx-10"><ReviewerDirectory /></div> : null}
-      {tab === "criteria" ? <div className="-mx-6 md:-mx-10"><CriteriaManager /></div> : null}
+      {tab === "people" ? <div className="-mx-5 md:-mx-10"><ReviewerDirectory /></div> : null}
+      {tab === "criteria" ? <div className="-mx-5 md:-mx-10"><CriteriaManager /></div> : null}
       {tab === "general" ? <General confirm={confirm} setConfirm={setConfirm} /> : null}
     </div>
   )
